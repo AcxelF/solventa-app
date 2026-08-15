@@ -16,27 +16,30 @@ const VALID_TYPES = [
 
 const HEX_COLOR = /^#[0-9A-Fa-f]{6}$/;
 
-function getAccountById(id) {
-  return db.prepare("SELECT * FROM accounts WHERE id = ?").get(id);
+async function getAccountById(id) {
+  return db.get("SELECT * FROM accounts WHERE id = ?", [id]);
 }
 
-function getBalance(accountId) {
-  const row = db
-    .prepare(
-      `SELECT COALESCE(SUM(CASE WHEN type = 'ingreso' THEN amount ELSE -amount END), 0) AS balance
-       FROM transactions WHERE account_id = ?`
-    )
-    .get(accountId);
+async function getBalance(accountId) {
+  const row = await db.get(
+    `SELECT COALESCE(SUM(CASE WHEN type = 'ingreso' THEN amount ELSE -amount END), 0) AS balance
+     FROM transactions WHERE account_id = ?`,
+    [accountId]
+  );
   return row.balance;
 }
 
-function withBalance(account) {
-  return account ? { ...account, balance: getBalance(account.id) } : null;
+async function withBalance(account) {
+  return account ? { ...account, balance: await getBalance(account.id) } : null;
 }
 
-function listAccounts() {
-  const rows = db.prepare("SELECT * FROM accounts ORDER BY id").all();
-  return rows.map(withBalance);
+async function listAccounts() {
+  const rows = await db.all("SELECT * FROM accounts ORDER BY id");
+  const withBalances = [];
+  for (const account of rows) {
+    withBalances.push(await withBalance(account));
+  }
+  return withBalances;
 }
 
 function validateAccount({ name, type, color }) {
@@ -51,43 +54,44 @@ function validateAccount({ name, type, color }) {
   }
 }
 
-function createAccount({ name, type, color, icon_url } = {}) {
+async function createAccount({ name, type, color, icon_url } = {}) {
   validateAccount({ name, type, color });
 
-  const result = db
-    .prepare(
-      "INSERT INTO accounts (name, type, color, icon_url) VALUES (?, ?, ?, ?)"
-    )
-    .run(name.trim(), type, color, icon_url || null);
+  const result = await db.run(
+    "INSERT INTO accounts (name, type, color, icon_url) VALUES (?, ?, ?, ?)",
+    [name.trim(), type, color, icon_url || null]
+  );
 
-  return withBalance(getAccountById(result.lastInsertRowid));
+  return withBalance(await getAccountById(result.lastInsertRowid));
 }
 
-function updateAccount(id, fields = {}) {
-  const existing = getAccountById(id);
+async function updateAccount(id, fields = {}) {
+  const existing = await getAccountById(id);
   if (!existing) return null;
 
   const next = { ...existing, ...fields };
   validateAccount(next);
 
-  db.prepare(
-    "UPDATE accounts SET name = ?, type = ?, color = ?, icon_url = ? WHERE id = ?"
-  ).run(next.name.trim(), next.type, next.color, next.icon_url || null, id);
+  await db.run(
+    "UPDATE accounts SET name = ?, type = ?, color = ?, icon_url = ? WHERE id = ?",
+    [next.name.trim(), next.type, next.color, next.icon_url || null, id]
+  );
 
-  return withBalance(getAccountById(id));
+  return withBalance(await getAccountById(id));
 }
 
-function deleteAccount(id) {
-  const count = db
-    .prepare("SELECT COUNT(*) AS n FROM transactions WHERE account_id = ?")
-    .get(id).n;
-  if (count > 0) {
+async function deleteAccount(id) {
+  const count = await db.get(
+    "SELECT COUNT(*) AS n FROM transactions WHERE account_id = ?",
+    [id]
+  );
+  if (count.n > 0) {
     throw new ValidationError(
       "No puedes eliminar una cuenta que tiene movimientos asociados."
     );
   }
 
-  const result = db.prepare("DELETE FROM accounts WHERE id = ?").run(id);
+  const result = await db.run("DELETE FROM accounts WHERE id = ?", [id]);
   return result.changes > 0;
 }
 

@@ -23,11 +23,11 @@ function getTodayISO() {
   return `${year}-${month}-${day}`;
 }
 
-function getTransaction(id) {
-  return db.prepare(`${SELECT_JOINED} WHERE t.id = ?`).get(id);
+async function getTransaction(id) {
+  return db.get(`${SELECT_JOINED} WHERE t.id = ?`, [id]);
 }
 
-function listTransactions({
+async function listTransactions({
   account_id,
   category_id,
   from,
@@ -59,12 +59,13 @@ function listTransactions({
   }
 
   const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
-  return db
-    .prepare(`${SELECT_JOINED} ${where} ORDER BY t.date DESC, t.id DESC`)
-    .all(...params);
+  return db.all(
+    `${SELECT_JOINED} ${where} ORDER BY t.date DESC, t.id DESC`,
+    params
+  );
 }
 
-function validateTransaction({ account_id, category_id, type, amount }) {
+async function validateTransaction({ account_id, category_id, type, amount }) {
   if (!["ingreso", "gasto"].includes(type)) {
     throw new ValidationError("El tipo debe ser 'ingreso' o 'gasto'.");
   }
@@ -78,14 +79,16 @@ function validateTransaction({ account_id, category_id, type, amount }) {
     throw new ValidationError("La categoría es obligatoria.");
   }
 
-  const account = db.prepare("SELECT id FROM accounts WHERE id = ?").get(account_id);
+  const account = await db.get("SELECT id FROM accounts WHERE id = ?", [
+    account_id,
+  ]);
   if (!account) {
     throw new ValidationError("La cuenta seleccionada no existe.");
   }
 
-  const category = db
-    .prepare("SELECT id, type FROM categories WHERE id = ?")
-    .get(category_id);
+  const category = await db.get("SELECT id, type FROM categories WHERE id = ?", [
+    category_id,
+  ]);
   if (!category) {
     throw new ValidationError("La categoría seleccionada no existe.");
   }
@@ -94,7 +97,7 @@ function validateTransaction({ account_id, category_id, type, amount }) {
   }
 }
 
-function createTransaction({
+async function createTransaction({
   account_id,
   category_id,
   type,
@@ -102,58 +105,58 @@ function createTransaction({
   description,
   date,
 } = {}) {
-  validateTransaction({ account_id, category_id, type, amount });
+  await validateTransaction({ account_id, category_id, type, amount });
 
   const transactionDate = date || getTodayISO();
 
-  const result = db
-    .prepare(
-      `INSERT INTO transactions (account_id, category_id, type, amount, description, date)
-       VALUES (?, ?, ?, ?, ?, ?)`
-    )
-    .run(
+  const result = await db.run(
+    `INSERT INTO transactions (account_id, category_id, type, amount, description, date)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    [
       account_id,
       category_id,
       type,
       amount,
       description || null,
-      transactionDate
-    );
+      transactionDate,
+    ]
+  );
 
   return getTransaction(result.lastInsertRowid);
 }
 
-function updateTransaction(id, fields = {}) {
-  const raw = db.prepare("SELECT * FROM transactions WHERE id = ?").get(id);
+async function updateTransaction(id, fields = {}) {
+  const raw = await db.get("SELECT * FROM transactions WHERE id = ?", [id]);
   if (!raw) return null;
 
   const next = { ...raw, ...fields };
-  validateTransaction(next);
+  await validateTransaction(next);
 
-  db.prepare(
+  await db.run(
     `UPDATE transactions
      SET account_id = ?, category_id = ?, type = ?, amount = ?, description = ?, date = ?
-     WHERE id = ?`
-  ).run(
-    next.account_id,
-    next.category_id,
-    next.type,
-    next.amount,
-    next.description || null,
-    next.date,
-    id
+     WHERE id = ?`,
+    [
+      next.account_id,
+      next.category_id,
+      next.type,
+      next.amount,
+      next.description || null,
+      next.date,
+      id,
+    ]
   );
 
   return getTransaction(id);
 }
 
-function deleteTransaction(id) {
-  const result = db.prepare("DELETE FROM transactions WHERE id = ?").run(id);
+async function deleteTransaction(id) {
+  const result = await db.run("DELETE FROM transactions WHERE id = ?", [id]);
   return result.changes > 0;
 }
 
-function getSummary({ month, account_id } = {}) {
-  const transactions = listTransactions({ month, account_id });
+async function getSummary({ month, account_id } = {}) {
+  const transactions = await listTransactions({ month, account_id });
 
   let totalIngresos = 0;
   let totalGastos = 0;
@@ -180,12 +183,11 @@ function getSummary({ month, account_id } = {}) {
     (a, b) => b.total - a.total
   );
 
-  const totalBalanceRow = db
-    .prepare(
-      `SELECT COALESCE(SUM(CASE WHEN type = 'ingreso' THEN amount ELSE -amount END), 0) AS balance
-       FROM transactions ${account_id ? "WHERE account_id = ?" : ""}`
-    )
-    .get(...(account_id ? [account_id] : []));
+  const totalBalanceRow = await db.get(
+    `SELECT COALESCE(SUM(CASE WHEN type = 'ingreso' THEN amount ELSE -amount END), 0) AS balance
+     FROM transactions ${account_id ? "WHERE account_id = ?" : ""}`,
+    account_id ? [account_id] : []
+  );
 
   return {
     totalBalance: totalBalanceRow.balance,

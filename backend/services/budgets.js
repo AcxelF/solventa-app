@@ -30,14 +30,14 @@ function validateAmount(amount) {
   }
 }
 
-function getBudgetById(id) {
-  return db.prepare(`${SELECT_JOINED} WHERE b.id = ?`).get(id);
+async function getBudgetById(id) {
+  return db.get(`${SELECT_JOINED} WHERE b.id = ?`, [id]);
 }
 
-function spendByCategory(months) {
+async function spendByCategory(months) {
   const map = new Map();
   for (const month of new Set(months)) {
-    const summary = transactionsService.getSummary({ month });
+    const summary = await transactionsService.getSummary({ month });
     for (const row of summary.byCategory) {
       map.set(`${month}:${row.category_id}`, row.total);
     }
@@ -45,9 +45,9 @@ function spendByCategory(months) {
   return map;
 }
 
-function enrich(budgets) {
+async function enrich(budgets) {
   if (!budgets.length) return [];
-  const spend = spendByCategory(budgets.map((b) => b.month));
+  const spend = await spendByCategory(budgets.map((b) => b.month));
   return budgets.map((b) => {
     const spent = spend.get(`${b.month}:${b.category_id}`) || 0;
     return {
@@ -65,32 +65,27 @@ function enrich(budgets) {
   });
 }
 
-function listBudgets({ month } = {}) {
+async function listBudgets({ month } = {}) {
   if (month) validateMonth(month);
   const budgets = month
-    ? db
-        .prepare(
-          `${SELECT_JOINED} WHERE b.month = ? ORDER BY c.name COLLATE NOCASE`
-        )
-        .all(month)
-    : db
-        .prepare(
-          `${SELECT_JOINED} ORDER BY b.month DESC, c.name COLLATE NOCASE`
-        )
-        .all();
+    ? await db.all(
+        `${SELECT_JOINED} WHERE b.month = ? ORDER BY c.name COLLATE NOCASE`,
+        [month]
+      )
+    : await db.all(`${SELECT_JOINED} ORDER BY b.month DESC, c.name COLLATE NOCASE`);
   return enrich(budgets);
 }
 
-function createBudget({ category_id, month, amount } = {}) {
+async function createBudget({ category_id, month, amount } = {}) {
   validateMonth(month);
   validateAmount(amount);
   if (!Number.isInteger(category_id)) {
     throw new ValidationError("La categoría es obligatoria.");
   }
 
-  const category = db
-    .prepare("SELECT id, type FROM categories WHERE id = ?")
-    .get(category_id);
+  const category = await db.get("SELECT id, type FROM categories WHERE id = ?", [
+    category_id,
+  ]);
   if (!category) {
     throw new ValidationError("La categoría seleccionada no existe.");
   }
@@ -101,12 +96,12 @@ function createBudget({ category_id, month, amount } = {}) {
   }
 
   try {
-    const result = db
-      .prepare(
-        "INSERT INTO budgets (category_id, month, amount) VALUES (?, ?, ?)"
-      )
-      .run(category_id, month, amount);
-    return enrich([getBudgetById(result.lastInsertRowid)])[0];
+    const result = await db.run(
+      "INSERT INTO budgets (category_id, month, amount) VALUES (?, ?, ?)",
+      [category_id, month, amount]
+    );
+    const created = await getBudgetById(result.lastInsertRowid);
+    return (await enrich([created]))[0];
   } catch (err) {
     if (err && typeof err.code === "string" && err.code.startsWith("SQLITE_CONSTRAINT")) {
       throw new ValidationError(
@@ -117,19 +112,20 @@ function createBudget({ category_id, month, amount } = {}) {
   }
 }
 
-function updateBudget(id, fields = {}) {
-  const existing = db.prepare("SELECT * FROM budgets WHERE id = ?").get(id);
+async function updateBudget(id, fields = {}) {
+  const existing = await db.get("SELECT * FROM budgets WHERE id = ?", [id]);
   if (!existing) return null;
 
   const next = { ...existing, ...fields };
   validateAmount(next.amount);
 
-  db.prepare("UPDATE budgets SET amount = ? WHERE id = ?").run(next.amount, id);
-  return enrich([getBudgetById(id)])[0];
+  await db.run("UPDATE budgets SET amount = ? WHERE id = ?", [next.amount, id]);
+  const updated = await getBudgetById(id);
+  return (await enrich([updated]))[0];
 }
 
-function deleteBudget(id) {
-  const result = db.prepare("DELETE FROM budgets WHERE id = ?").run(id);
+async function deleteBudget(id) {
+  const result = await db.run("DELETE FROM budgets WHERE id = ?", [id]);
   return result.changes > 0;
 }
 

@@ -34,29 +34,30 @@ function toISO({ year, month, day }) {
   return `${year}-${pad2(month)}-${pad2(day)}`;
 }
 
-function getCard(id) {
-  return db
-    .prepare("SELECT * FROM accounts WHERE id = ? AND type = ?")
-    .get(id, CARD_TYPE);
+async function getCard(id) {
+  return db.get("SELECT * FROM accounts WHERE id = ? AND type = ?", [
+    id,
+    CARD_TYPE,
+  ]);
 }
 
-function sumSpending(accountId, fromISO, toISO, inclusive) {
+async function sumSpending(accountId, fromISO, toISO, inclusive) {
   const sql = inclusive
     ? `SELECT COALESCE(SUM(amount), 0) AS total FROM transactions
        WHERE account_id = ? AND type = 'gasto' AND date >= ? AND date <= ?`
     : `SELECT COALESCE(SUM(amount), 0) AS total FROM transactions
        WHERE account_id = ? AND type = 'gasto' AND date >= ? AND date < ?`;
-  return db.prepare(sql).get(accountId, fromISO, toISO).total;
+  const row = await db.get(sql, [accountId, fromISO, toISO]);
+  return row.total;
 }
 
-function getConsumedUnpaid(accountId) {
+async function getConsumedUnpaid(accountId) {
   // "Consumido y no pagado" = gastos - pagos registrados en la tarjeta.
-  const row = db
-    .prepare(
-      `SELECT COALESCE(SUM(CASE WHEN type = 'gasto' THEN amount ELSE -amount END), 0) AS total
-       FROM transactions WHERE account_id = ?`
-    )
-    .get(accountId);
+  const row = await db.get(
+    `SELECT COALESCE(SUM(CASE WHEN type = 'gasto' THEN amount ELSE -amount END), 0) AS total
+     FROM transactions WHERE account_id = ?`,
+    [accountId]
+  );
   return Math.max(0, row.total);
 }
 
@@ -77,7 +78,7 @@ function computePaymentDates(today, paymentDay) {
   };
 }
 
-function computeCycle(card) {
+async function computeCycle(card) {
   const now = new Date();
   const today = {
     year: now.getFullYear(),
@@ -107,9 +108,9 @@ function computeCycle(card) {
   const lastCutISO = toISO(lastCut);
 
   // Consumo del periodo actual: desde el corte anterior hasta hoy (inclusivo).
-  const currentConsumption = sumSpending(card.id, lastCutISO, todayISO, true);
+  const currentConsumption = await sumSpending(card.id, lastCutISO, todayISO, true);
   // Monto a pagar: consumo del periodo ya cerrado entre los dos cortes previos.
-  const amountDue = sumSpending(card.id, prevCutISO, lastCutISO, false);
+  const amountDue = await sumSpending(card.id, prevCutISO, lastCutISO, false);
 
   const daysToNextPayment = Math.round(
     (new Date(`${toISO(nextPayment)}T00:00:00`) -
@@ -118,7 +119,7 @@ function computeCycle(card) {
   );
 
   // Crédito disponible: línea de crédito menos lo consumido y no pagado.
-  const consumedUnpaid = getConsumedUnpaid(card.id);
+  const consumedUnpaid = await getConsumedUnpaid(card.id);
   const availableCredit = Math.max(0, card.credit_limit - consumedUnpaid);
 
   return {
@@ -135,8 +136,8 @@ function computeCycle(card) {
   };
 }
 
-function withCycle(card) {
-  return card ? { ...card, cycle: computeCycle(card) } : null;
+async function withCycle(card) {
+  return card ? { ...card, cycle: await computeCycle(card) } : null;
 }
 
 function validateCard({
@@ -179,23 +180,25 @@ function validateCard({
   }
 }
 
-function listCreditCards() {
-  const cards = db
-    .prepare("SELECT * FROM accounts WHERE type = ? ORDER BY id")
-    .all(CARD_TYPE);
-  return cards.map(withCycle);
+async function listCreditCards() {
+  const cards = await db.all("SELECT * FROM accounts WHERE type = ? ORDER BY id", [
+    CARD_TYPE,
+  ]);
+  const withCycles = [];
+  for (const card of cards) {
+    withCycles.push(await withCycle(card));
+  }
+  return withCycles;
 }
 
-function createCreditCard(fields = {}) {
+async function createCreditCard(fields = {}) {
   validateCard(fields);
 
-  const result = db
-    .prepare(
-      `INSERT INTO accounts
-         (name, type, color, brand, last_four, credit_limit, cut_day, payment_day)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-    )
-    .run(
+  const result = await db.run(
+    `INSERT INTO accounts
+       (name, type, color, brand, last_four, credit_limit, cut_day, payment_day)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
       fields.name.trim(),
       CARD_TYPE,
       fields.color,
@@ -203,56 +206,59 @@ function createCreditCard(fields = {}) {
       fields.last_four,
       fields.credit_limit,
       fields.cut_day,
-      fields.payment_day
-    );
+      fields.payment_day,
+    ]
+  );
 
-  return withCycle(getCard(result.lastInsertRowid));
+  return withCycle(await getCard(result.lastInsertRowid));
 }
 
-function updateCreditCard(id, fields = {}) {
-  const existing = getCard(id);
+async function updateCreditCard(id, fields = {}) {
+  const existing = await getCard(id);
   if (!existing) return null;
 
   const next = { ...existing, ...fields };
   validateCard(next);
 
-  db.prepare(
+  await db.run(
     `UPDATE accounts
      SET name = ?, color = ?, brand = ?, last_four = ?, credit_limit = ?, cut_day = ?, payment_day = ?
-     WHERE id = ?`
-  ).run(
-    next.name.trim(),
-    next.color,
-    next.brand,
-    next.last_four,
-    next.credit_limit,
-    next.cut_day,
-    next.payment_day,
-    id
+     WHERE id = ?`,
+    [
+      next.name.trim(),
+      next.color,
+      next.brand,
+      next.last_four,
+      next.credit_limit,
+      next.cut_day,
+      next.payment_day,
+      id,
+    ]
   );
 
-  return withCycle(getCard(id));
+  return withCycle(await getCard(id));
 }
 
-function deleteCreditCard(id) {
-  const existing = getCard(id);
+async function deleteCreditCard(id) {
+  const existing = await getCard(id);
   if (!existing) return false;
 
-  const count = db
-    .prepare("SELECT COUNT(*) AS n FROM transactions WHERE account_id = ?")
-    .get(id).n;
-  if (count > 0) {
+  const count = await db.get(
+    "SELECT COUNT(*) AS n FROM transactions WHERE account_id = ?",
+    [id]
+  );
+  if (count.n > 0) {
     throw new ValidationError(
       "No puedes eliminar una tarjeta que tiene movimientos asociados."
     );
   }
 
-  const result = db.prepare("DELETE FROM accounts WHERE id = ?").run(id);
+  const result = await db.run("DELETE FROM accounts WHERE id = ?", [id]);
   return result.changes > 0;
 }
 
-function getCreditCard(id) {
-  return withCycle(getCard(id));
+async function getCreditCard(id) {
+  return withCycle(await getCard(id));
 }
 
 module.exports = {

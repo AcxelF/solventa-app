@@ -1,13 +1,44 @@
-const Database = require("better-sqlite3");
-const path = require("path");
+require("dotenv").config();
+const { createClient } = require("@libsql/client");
 
-const dbPath = path.join(__dirname, "data.db");
-const db = new Database(dbPath);
+const url = process.env.TURSO_DATABASE_URL;
+const authToken = process.env.TURSO_AUTH_TOKEN;
+const isFileUrl = typeof url === "string" && url.startsWith("file:");
 
-db.pragma("journal_mode = WAL");
-db.pragma("foreign_keys = ON");
+if (!url) {
+  throw new Error(
+    "Falta TURSO_DATABASE_URL en las variables de entorno (.env)."
+  );
+}
+if (!isFileUrl && !authToken) {
+  throw new Error(
+    "Falta TURSO_AUTH_TOKEN en las variables de entorno (.env)."
+  );
+}
 
-db.exec(`
+const db = createClient({ url, authToken });
+
+// Helpers asíncronos con una API parecida a better-sqlite3 (get/all/run),
+// para que los servicios mantengan el mismo estilo de consulta.
+async function get(sql, args = []) {
+  const { rows } = await db.execute({ sql, args });
+  return rows[0];
+}
+
+async function all(sql, args = []) {
+  const { rows } = await db.execute({ sql, args });
+  return rows;
+}
+
+async function run(sql, args = []) {
+  const result = await db.execute({ sql, args });
+  return {
+    changes: Number(result.rowsAffected),
+    lastInsertRowid: Number(result.lastInsertRowid),
+  };
+}
+
+const SCHEMA = `
   CREATE TABLE IF NOT EXISTS accounts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
@@ -70,15 +101,25 @@ db.exec(`
     note TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
-`);
+`;
 
-migrate();
+// Crea las tablas (y aplica migraciones de columnas) si no existen.
+async function ensureSchema() {
+  await db.executeMultiple(SCHEMA);
+  await migrate();
+}
 
-function migrate() {
-  const columns = db
-    .prepare("PRAGMA table_info(accounts)")
-    .all()
-    .map((column) => column.name);
+// Inicializa el schema y además siembra las categorías de fábrica.
+// Llamarlo una sola vez al arrancar el servidor.
+async function init() {
+  await ensureSchema();
+  await seedFactoryCategories();
+}
+
+async function migrate() {
+  const columns = (await all("PRAGMA table_info(accounts)")).map(
+    (column) => column.name
+  );
 
   const additions = [
     ["brand", "TEXT"],
@@ -90,14 +131,12 @@ function migrate() {
 
   for (const [name, type] of additions) {
     if (!columns.includes(name)) {
-      db.exec(`ALTER TABLE accounts ADD COLUMN ${name} ${type}`);
+      await run(`ALTER TABLE accounts ADD COLUMN ${name} ${type}`);
     }
   }
 }
 
-seedFactoryCategories();
-
-function seedFactoryCategories() {
+async function seedFactoryCategories() {
   const factory = [
     { name: "Alimentación", type: "gasto", icon: "utensils", color: "#E67E22" },
     { name: "Transporte", type: "gasto", icon: "car", color: "#3498DB" },
@@ -112,10 +151,19 @@ function seedFactoryCategories() {
     { name: "Otros", type: "ingreso", icon: "tag", color: "#7F8C8D" },
   ];
 
-  const insert = db.prepare(
-    "INSERT OR IGNORE INTO categories (name, type, icon, color) VALUES (?, ?, ?, ?)"
-  );
-  for (const c of factory) insert.run(c.name, c.type, c.icon, c.color);
+  for (const c of factory) {
+    await run(
+      "INSERT OR IGNORE INTO categories (name, type, icon, color) VALUES (?, ?, ?, ?)",
+      [c.name, c.type, c.icon, c.color]
+    );
+  }
 }
+
+db.get = get;
+db.all = all;
+db.run = run;
+db.init = init;
+db.ensureSchema = ensureSchema;
+db.SCHEMA = SCHEMA;
 
 module.exports = db;

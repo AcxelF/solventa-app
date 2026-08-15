@@ -33,8 +33,8 @@ function lastDayOfMonth(year, month) {
   return new Date(year, month, 0).getDate();
 }
 
-function totalGastos(from, to) {
-  const rows = transactionsService.listTransactions({ from, to });
+async function totalGastos(from, to) {
+  const rows = await transactionsService.listTransactions({ from, to });
   return rows.reduce(
     (sum, t) => (t.type === "gasto" ? sum + t.amount : sum),
     0
@@ -45,9 +45,8 @@ function totalGastos(from, to) {
 // próximo pago) y los presupuestos del mes actual al 90% o más del límite.
 // Se ordena por fecha más cercana primero; los presupuestos (sin fecha) van
 // después, por porcentaje consumido descendente.
-function getUpcomingPayments() {
-  const cards = creditCardsService
-    .listCreditCards()
+async function getUpcomingPayments() {
+  const cards = (await creditCardsService.listCreditCards())
     .filter((card) => card.cycle && card.cycle.amount_due > 0)
     .map((card) => ({
       type: "card",
@@ -59,8 +58,7 @@ function getUpcomingPayments() {
     }))
     .sort((a, b) => (a.date < b.date ? -1 : 1));
 
-  const budgets = budgetsService
-    .listBudgets({ month: currentMonthISO() })
+  const budgets = (await budgetsService.listBudgets({ month: currentMonthISO() }))
     .filter((b) => !b.overLimit && b.percent >= BUDGET_WARNING_PERCENT)
     .map((b) => ({
       type: "budget",
@@ -81,12 +79,12 @@ function getUpcomingPayments() {
 // Racha de presupuesto: para cada categoría con presupuesto, cuenta los meses
 // consecutivos (desde el mes actual hacia atrás) donde el gasto real no
 // superó el límite. Devuelve la racha más larga entre todas las categorías.
-function getBudgetStreak() {
-  const allBudgets = budgetsService.listBudgets();
+async function getBudgetStreak() {
+  const allBudgets = await budgetsService.listBudgets();
   if (!allBudgets.length) return { months: 0 };
 
   const monthsWithBudgets = [...new Set(allBudgets.map((b) => b.month))];
-  const spend = budgetsService.spendByCategory(monthsWithBudgets);
+  const spend = await budgetsService.spendByCategory(monthsWithBudgets);
 
   const byCategory = new Map();
   for (const budget of allBudgets) {
@@ -130,7 +128,7 @@ function getBudgetStreak() {
 
 // Comparación justa con el mes pasado: mismo rango de días del mes actual
 // (del día 1 a hoy) contra el mes anterior en el mismo rango de días.
-function getMonthComparison() {
+async function getMonthComparison() {
   const today = getTodayISO();
   const [year, month, day] = today.split("-").map(Number);
   const currentFrom = `${year}-${pad2(month)}-01`;
@@ -141,8 +139,8 @@ function getMonthComparison() {
   const prevFrom = `${prevYear}-${pad2(prevMonth)}-01`;
   const prevTo = `${prevYear}-${pad2(prevMonth)}-${pad2(prevToDay)}`;
 
-  const currentTotal = totalGastos(currentFrom, today);
-  const prevTotal = totalGastos(prevFrom, prevTo);
+  const currentTotal = await totalGastos(currentFrom, today);
+  const prevTotal = await totalGastos(prevFrom, prevTo);
 
   let pct = null;
   let direction = "same";
@@ -167,8 +165,8 @@ function getMonthComparison() {
 }
 
 // Meta más cercana: la meta activa con mayor porcentaje de avance.
-function getClosestGoal() {
-  const active = goalsService.listGoals().filter((goal) => !goal.completed);
+async function getClosestGoal() {
+  const active = (await goalsService.listGoals()).filter((goal) => !goal.completed);
   if (!active.length) return null;
 
   const best = active.reduce((a, b) => (b.percent > a.percent ? b : a));
@@ -194,8 +192,8 @@ function getClosestGoal() {
 }
 
 // Categoría con más gasto del mes seleccionado.
-function getTopCategory(month) {
-  const summary = transactionsService.getSummary({ month });
+async function getTopCategory(month) {
+  const summary = await transactionsService.getSummary({ month });
   const top = summary.byCategory[0];
   if (!top || summary.totalGastos <= 0) return null;
 
@@ -209,13 +207,22 @@ function getTopCategory(month) {
   };
 }
 
-function getWidgets({ month } = {}) {
+async function getWidgets({ month } = {}) {
+  const [upcoming_payments, budget_streak, month_comparison, closest_goal, top_category] =
+    await Promise.all([
+      getUpcomingPayments(),
+      getBudgetStreak(),
+      getMonthComparison(),
+      getClosestGoal(),
+      getTopCategory(month || currentMonthISO()),
+    ]);
+
   return {
-    upcoming_payments: getUpcomingPayments(),
-    budget_streak: getBudgetStreak(),
-    month_comparison: getMonthComparison(),
-    closest_goal: getClosestGoal(),
-    top_category: getTopCategory(month || currentMonthISO()),
+    upcoming_payments,
+    budget_streak,
+    month_comparison,
+    closest_goal,
+    top_category,
   };
 }
 

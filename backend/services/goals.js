@@ -38,22 +38,21 @@ function validateDate(date) {
   }
 }
 
-function getGoal(id) {
-  return db.prepare("SELECT * FROM savings_goals WHERE id = ?").get(id);
+async function getGoal(id) {
+  return db.get("SELECT * FROM savings_goals WHERE id = ?", [id]);
 }
 
-function getGoalCurrentAmount(goalId) {
-  const row = db
-    .prepare(
-      "SELECT COALESCE(SUM(amount), 0) AS total FROM savings_contributions WHERE goal_id = ?"
-    )
-    .get(goalId);
+async function getGoalCurrentAmount(goalId) {
+  const row = await db.get(
+    "SELECT COALESCE(SUM(amount), 0) AS total FROM savings_contributions WHERE goal_id = ?",
+    [goalId]
+  );
   return row.total;
 }
 
-function withProgress(goal) {
+async function withProgress(goal) {
   if (!goal) return null;
-  const currentAmount = getGoalCurrentAmount(goal.id);
+  const currentAmount = await getGoalCurrentAmount(goal.id);
   return {
     ...goal,
     current_amount: currentAmount,
@@ -65,27 +64,30 @@ function withProgress(goal) {
   };
 }
 
-function listGoals() {
-  const goals = db.prepare("SELECT * FROM savings_goals ORDER BY id").all();
-  return goals.map(withProgress);
+async function listGoals() {
+  const goals = await db.all("SELECT * FROM savings_goals ORDER BY id");
+  const withProgressList = [];
+  for (const goal of goals) {
+    withProgressList.push(await withProgress(goal));
+  }
+  return withProgressList;
 }
 
-function createGoal({ name, target_amount, deadline } = {}) {
+async function createGoal({ name, target_amount, deadline } = {}) {
   validateName(name);
   validateTargetAmount(target_amount);
   validateDeadline(deadline);
 
-  const result = db
-    .prepare(
-      "INSERT INTO savings_goals (name, target_amount, deadline) VALUES (?, ?, ?)"
-    )
-    .run(name.trim(), target_amount, deadline || null);
+  const result = await db.run(
+    "INSERT INTO savings_goals (name, target_amount, deadline) VALUES (?, ?, ?)",
+    [name.trim(), target_amount, deadline || null]
+  );
 
-  return withProgress(getGoal(result.lastInsertRowid));
+  return withProgress(await getGoal(result.lastInsertRowid));
 }
 
-function updateGoal(id, fields = {}) {
-  const existing = getGoal(id);
+async function updateGoal(id, fields = {}) {
+  const existing = await getGoal(id);
   if (!existing) return null;
 
   const next = { ...existing, ...fields };
@@ -93,56 +95,53 @@ function updateGoal(id, fields = {}) {
   validateTargetAmount(next.target_amount);
   validateDeadline(next.deadline);
 
-  db.prepare(
-    "UPDATE savings_goals SET name = ?, target_amount = ?, deadline = ? WHERE id = ?"
-  ).run(next.name.trim(), next.target_amount, next.deadline || null, id);
+  await db.run(
+    "UPDATE savings_goals SET name = ?, target_amount = ?, deadline = ? WHERE id = ?",
+    [next.name.trim(), next.target_amount, next.deadline || null, id]
+  );
 
-  return withProgress(getGoal(id));
+  return withProgress(await getGoal(id));
 }
 
-function deleteGoal(id) {
-  const result = db.prepare("DELETE FROM savings_goals WHERE id = ?").run(id);
+async function deleteGoal(id) {
+  const result = await db.run("DELETE FROM savings_goals WHERE id = ?", [id]);
   return result.changes > 0;
 }
 
-function listContributions(goalId) {
-  if (!getGoal(goalId)) {
+async function listContributions(goalId) {
+  if (!(await getGoal(goalId))) {
     throw new ValidationError("La meta no existe.");
   }
-  return db
-    .prepare(
-      "SELECT * FROM savings_contributions WHERE goal_id = ? ORDER BY date DESC, id DESC"
-    )
-    .all(goalId);
+  return db.all(
+    "SELECT * FROM savings_contributions WHERE goal_id = ? ORDER BY date DESC, id DESC",
+    [goalId]
+  );
 }
 
-function addContribution(goalId, { amount, date, note } = {}) {
-  if (!getGoal(goalId)) {
+async function addContribution(goalId, { amount, date, note } = {}) {
+  if (!(await getGoal(goalId))) {
     throw new ValidationError("La meta no existe.");
   }
   validateAmount(amount);
   validateDate(date);
 
-  const result = db
-    .prepare(
-      "INSERT INTO savings_contributions (goal_id, amount, date, note) VALUES (?, ?, ?, ?)"
-    )
-    .run(goalId, amount, date, note || null);
+  const result = await db.run(
+    "INSERT INTO savings_contributions (goal_id, amount, date, note) VALUES (?, ?, ?, ?)",
+    [goalId, amount, date, note || null]
+  );
 
-  return db
-    .prepare("SELECT * FROM savings_contributions WHERE id = ?")
-    .get(result.lastInsertRowid);
+  return db.get("SELECT * FROM savings_contributions WHERE id = ?", [
+    result.lastInsertRowid,
+  ]);
 }
 
-function deleteContribution(id) {
-  const result = db
-    .prepare("DELETE FROM savings_contributions WHERE id = ?")
-    .run(id);
+async function deleteContribution(id) {
+  const result = await db.run("DELETE FROM savings_contributions WHERE id = ?", [id]);
   return result.changes > 0;
 }
 
-function getGoalWithProgress(id) {
-  return withProgress(getGoal(id));
+async function getGoalWithProgress(id) {
+  return withProgress(await getGoal(id));
 }
 
 module.exports = {

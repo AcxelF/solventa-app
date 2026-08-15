@@ -4,19 +4,20 @@ const { ValidationError } = require("./errors");
 const VALID_TYPES = ["ingreso", "gasto"];
 const HEX_COLOR = /^#[0-9A-Fa-f]{6}$/;
 
-function getCategoryById(id) {
-  return db.prepare("SELECT * FROM categories WHERE id = ?").get(id);
+async function getCategoryById(id) {
+  return db.get("SELECT * FROM categories WHERE id = ?", [id]);
 }
 
-function listCategories({ type } = {}) {
+async function listCategories({ type } = {}) {
   if (type) {
-    return db
-      .prepare("SELECT * FROM categories WHERE type = ? ORDER BY name COLLATE NOCASE")
-      .all(type);
+    return db.all(
+      "SELECT * FROM categories WHERE type = ? ORDER BY name COLLATE NOCASE",
+      [type]
+    );
   }
-  return db
-    .prepare("SELECT * FROM categories ORDER BY type, name COLLATE NOCASE")
-    .all();
+  return db.all(
+    "SELECT * FROM categories ORDER BY type, name COLLATE NOCASE"
+  );
 }
 
 function validateCategory({ name, type, icon, color }) {
@@ -38,15 +39,14 @@ function isUniqueConstraint(err) {
   return err && typeof err.code === "string" && err.code.startsWith("SQLITE_CONSTRAINT");
 }
 
-function createCategory({ name, type, icon, color } = {}) {
+async function createCategory({ name, type, icon, color } = {}) {
   validateCategory({ name, type, icon, color });
 
   try {
-    const result = db
-      .prepare(
-        "INSERT INTO categories (name, type, icon, color) VALUES (?, ?, ?, ?)"
-      )
-      .run(name.trim(), type, icon, color);
+    const result = await db.run(
+      "INSERT INTO categories (name, type, icon, color) VALUES (?, ?, ?, ?)",
+      [name.trim(), type, icon, color]
+    );
     return getCategoryById(result.lastInsertRowid);
   } catch (err) {
     if (isUniqueConstraint(err)) {
@@ -56,17 +56,18 @@ function createCategory({ name, type, icon, color } = {}) {
   }
 }
 
-function updateCategory(id, fields = {}) {
-  const existing = getCategoryById(id);
+async function updateCategory(id, fields = {}) {
+  const existing = await getCategoryById(id);
   if (!existing) return null;
 
   const next = { ...existing, ...fields };
   validateCategory(next);
 
   try {
-    db.prepare(
-      "UPDATE categories SET name = ?, type = ?, icon = ?, color = ? WHERE id = ?"
-    ).run(next.name.trim(), next.type, next.icon, next.color, id);
+    await db.run(
+      "UPDATE categories SET name = ?, type = ?, icon = ?, color = ? WHERE id = ?",
+      [next.name.trim(), next.type, next.icon, next.color, id]
+    );
   } catch (err) {
     if (isUniqueConstraint(err)) {
       throw new ValidationError("Ya existe una categoría con ese nombre y tipo.");
@@ -77,17 +78,18 @@ function updateCategory(id, fields = {}) {
   return getCategoryById(id);
 }
 
-function deleteCategory(id) {
-  const count = db
-    .prepare("SELECT COUNT(*) AS n FROM transactions WHERE category_id = ?")
-    .get(id).n;
-  if (count > 0) {
+async function deleteCategory(id) {
+  const count = await db.get(
+    "SELECT COUNT(*) AS n FROM transactions WHERE category_id = ?",
+    [id]
+  );
+  if (count.n > 0) {
     throw new ValidationError(
       "No puedes eliminar una categoría que está en uso por algún movimiento."
     );
   }
 
-  const result = db.prepare("DELETE FROM categories WHERE id = ?").run(id);
+  const result = await db.run("DELETE FROM categories WHERE id = ?", [id]);
   return result.changes > 0;
 }
 
