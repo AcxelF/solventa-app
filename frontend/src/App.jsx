@@ -71,14 +71,14 @@ export default function App() {
             <h1 className="text-lg font-semibold text-text">Solventa</h1>
           </div>
 
-          <div className="flex items-center gap-3">
-            <nav className="flex gap-1 rounded-full bg-surface p-1">
+          <div className="flex w-full items-center gap-3 lg:w-auto">
+            <nav className="no-scrollbar flex min-w-0 flex-1 items-center gap-1 overflow-x-auto rounded-full bg-surface p-1">
               {NAV.map(({ key, label, icon: Icon }) => (
                 <button
                   key={key}
                   type="button"
                   onClick={() => navigate(key)}
-                  className={`flex items-center gap-2 rounded-full px-3 py-1.5 text-sm transition ${
+                  className={`flex shrink-0 items-center gap-2 whitespace-nowrap rounded-full px-3 py-1.5 text-sm transition ${
                     view === key
                       ? "bg-bg font-medium text-text shadow-sm"
                       : "text-text-secondary hover:text-text"
@@ -90,7 +90,7 @@ export default function App() {
               ))}
             </nav>
 
-            <div className="flex gap-1 rounded-full bg-surface p-1">
+            <div className="flex shrink-0 gap-1 rounded-full bg-surface p-1">
               {[
                 { key: "light", label: "Modo claro", icon: Sun },
                 { key: "dark", label: "Modo oscuro", icon: Moon },
