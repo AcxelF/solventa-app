@@ -64,54 +64,52 @@ export default function App() {
     <div className="min-h-screen bg-bg text-text">
       <header className="border-b border-border bg-bg">
         <div className="mx-auto flex w-full max-w-[1920px] flex-wrap items-center justify-between gap-4 px-6 py-4">
-          <div className="flex items-center gap-3">
+          <div className="order-1 flex items-center gap-3">
             <span className="flex h-8 w-9 items-center justify-center rounded-lg bg-text text-sm font-bold text-bg">
               S/
             </span>
             <h1 className="text-lg font-semibold text-text">Solventa</h1>
           </div>
 
-          <div className="flex w-full items-center gap-3 lg:w-auto">
-            <nav className="no-scrollbar flex min-w-0 flex-1 items-center gap-1 overflow-x-auto rounded-full bg-surface p-1">
-              {NAV.map(({ key, label, icon: Icon }) => (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => navigate(key)}
-                  className={`flex shrink-0 items-center gap-2 whitespace-nowrap rounded-full px-3 py-1.5 text-sm transition ${
-                    view === key
-                      ? "bg-bg font-medium text-text shadow-sm"
-                      : "text-text-secondary hover:text-text"
-                  }`}
-                >
-                  <Icon size={15} />
-                  {label}
-                </button>
-              ))}
-            </nav>
+          <nav className="no-scrollbar order-3 flex w-full min-w-0 items-center gap-1 overflow-x-auto rounded-full bg-surface p-1 lg:order-2 lg:ml-auto lg:w-auto">
+            {NAV.map(({ key, label, icon: Icon }) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => navigate(key)}
+                className={`flex shrink-0 items-center gap-2 whitespace-nowrap rounded-full px-3 py-1.5 text-sm transition ${
+                  view === key
+                    ? "bg-bg font-medium text-text shadow-sm"
+                    : "text-text-secondary hover:text-text"
+                }`}
+              >
+                <Icon size={15} />
+                {label}
+              </button>
+            ))}
+          </nav>
 
-            <div className="flex shrink-0 gap-1 rounded-full bg-surface p-1">
-              {[
-                { key: "light", label: "Modo claro", icon: Sun },
-                { key: "dark", label: "Modo oscuro", icon: Moon },
-                { key: "sepia", label: "Modo sepia", icon: Sunset },
-              ].map(({ key, label, icon: Icon }) => (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => setTheme(key)}
-                  aria-label={label}
-                  title={label}
-                  className={`rounded-full p-1.5 transition ${
-                    theme === key
-                      ? "bg-bg text-text shadow-sm"
-                      : "text-text-secondary hover:text-text"
-                  }`}
-                >
-                  <Icon size={15} />
-                </button>
-              ))}
-            </div>
+          <div className="order-2 flex shrink-0 gap-1 rounded-full bg-surface p-1 lg:order-3">
+            {[
+              { key: "light", label: "Modo claro", icon: Sun },
+              { key: "dark", label: "Modo oscuro", icon: Moon },
+              { key: "sepia", label: "Modo sepia", icon: Sunset },
+            ].map(({ key, label, icon: Icon }) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setTheme(key)}
+                aria-label={label}
+                title={label}
+                className={`rounded-full p-1.5 transition ${
+                  theme === key
+                    ? "bg-bg text-text shadow-sm"
+                    : "text-text-secondary hover:text-text"
+                }`}
+              >
+                <Icon size={15} />
+              </button>
+            ))}
           </div>
         </div>
       </header>
