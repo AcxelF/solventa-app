@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { ArrowRight, Plus } from "lucide-react";
+import { ArrowRight, Plus, Landmark, CreditCard } from "lucide-react";
 import {
   fetchSummary,
   fetchTransactions,
@@ -121,9 +121,10 @@ export default function Dashboard({
         </aside>
 
         <div className="min-w-0 space-y-6">
-          <div className="rounded-2xl border border-border bg-surface p-6 shadow-soft">
-            <div className="flex flex-wrap items-center justify-between gap-4">
-              <div className="flex flex-wrap items-center gap-6">
+          <div className="grid gap-4 sm:grid-cols-2">
+            {/* Cuadro 1: Saldo Líquido Disponible */}
+            <div className="flex flex-col justify-between rounded-2xl border border-border bg-surface p-6 shadow-soft transition hover:border-border-hover">
+              <div className="flex items-start justify-between gap-4">
                 <div>
                   <p className="text-xs font-medium uppercase tracking-wider text-text-muted">
                     Saldo Líquido Disponible
@@ -132,21 +133,39 @@ export default function Dashboard({
                     {formatMoney(summary.totalBalance)}
                   </p>
                 </div>
-
-                {summary.creditDebt > 0 && (
-                  <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-2">
-                    <p className="text-[11px] font-medium uppercase tracking-wider text-amber-500 dark:text-amber-400">
-                      Deuda en Tarjetas
-                    </p>
-                    <p className="mt-0.5 font-mono text-lg font-semibold text-amber-600 dark:text-amber-400">
-                      {formatMoney(summary.creditDebt)}
-                    </p>
-                  </div>
-                )}
+                <div className="rounded-xl bg-emerald-500/10 p-3 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                  <Landmark size={24} />
+                </div>
               </div>
-
-              <MonthNavigator month={month} onChange={setMonth} />
+              <p className="mt-4 text-xs text-text-muted">
+                Dinero disponible real en efectivo y cuentas de débito
+              </p>
             </div>
+
+            {/* Cuadro 2: Deuda en Tarjetas de Crédito */}
+            <div className="flex flex-col justify-between rounded-2xl border border-amber-500/30 bg-amber-500/5 p-6 shadow-soft transition hover:border-amber-500/50">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-wider text-amber-600 dark:text-amber-400">
+                    Deuda en Tarjetas
+                  </p>
+                  <p className="mt-1 font-mono text-3xl sm:text-4xl font-semibold text-amber-600 dark:text-amber-400">
+                    {formatMoney(summary.creditDebt || 0)}
+                  </p>
+                </div>
+                <div className="rounded-xl bg-amber-500/10 p-3 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                  <CreditCard size={24} />
+                </div>
+              </div>
+              <p className="mt-4 text-xs text-amber-600/80 dark:text-amber-400/80">
+                Línea de crédito acumulada utilizada a pagar
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between rounded-2xl border border-border bg-surface p-4 shadow-soft">
+            <span className="text-xs font-medium uppercase tracking-wider text-text-muted">Período Seleccionado</span>
+            <MonthNavigator month={month} onChange={setMonth} />
           </div>
 
           <SummaryCards summary={summary} />
