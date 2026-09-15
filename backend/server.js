@@ -9,6 +9,8 @@ const budgetsService = require("./services/budgets");
 const goalsService = require("./services/goals");
 const creditCardsService = require("./services/creditCards");
 const dashboardService = require("./services/dashboard");
+const whatsappService = require("./services/whatsappService");
+const whatsappParser = require("./services/whatsappParser");
 const { ValidationError } = require("./services/errors");
 
 const app = express();
@@ -215,6 +217,81 @@ app.get("/api/summary", handle(async (req, res) => {
 // ---- Widgets del dashboard ----
 app.get("/api/dashboard/widgets", handle(async (req, res) => {
   res.json(await dashboardService.getWidgets({ month: req.query.month }));
+}));
+
+// ---- WhatsApp Webhook (Meta Cloud API) ----
+app.get("/api/whatsapp/webhook", (req, res) => {
+  const mode = req.query["hub.mode"];
+  const token = req.query["hub.verify_token"];
+  const challenge = req.query["hub.challenge"];
+
+  const verifyToken = process.env.WHATSAPP_VERIFY_TOKEN || "solventa_wsp_secret";
+
+  if (mode && token) {
+    if (mode === "subscribe" && token === verifyToken) {
+      console.log("[WhatsApp Webhook] Verificado con éxito por Meta.");
+      return res.status(200).send(challenge);
+    } else {
+      return res.sendStatus(403);
+    }
+  }
+  return res.sendStatus(400);
+});
+
+app.post("/api/whatsapp/webhook", handle(async (req, res) => {
+  const body = req.body;
+
+  res.status(200).send("EVENT_RECEIVED");
+
+  if (body.object === "whatsapp_business_account") {
+    const entry = body.entry?.[0];
+    const changes = entry?.changes?.[0];
+    const value = changes?.value;
+    const message = value?.messages?.[0];
+
+    if (message && message.type === "text") {
+      const fromNumber = message.from;
+      const userText = message.text.body;
+
+      console.log(`[WhatsApp Webhook] Mensaje recibido de ${fromNumber}: "${userText}"`);
+
+      try {
+        const parsed = await whatsappParser.parseTransactionFromText(userText);
+
+        if (!parsed) {
+          await whatsappService.sendWhatsAppMessage(
+            fromNumber,
+            "⚠️ No pude entender el monto o concepto. Ejemplo de formato:\n\n• *Gasté 25 soles en almuerzo con Yape*\n• *Ingreso 1500 sueldo BCP*"
+          );
+          return;
+        }
+
+        await transactionsService.createTransaction({
+          account_id: parsed.account_id,
+          category_id: parsed.category_id,
+          type: parsed.type,
+          amount: parsed.amount,
+          description: parsed.description || userText,
+        });
+
+        const iconType = parsed.type === "ingreso" ? "📈 *Ingreso Registrado*" : "💸 *Gasto Registrado*";
+        const replyMsg = `${iconType}\n\n` +
+          `💰 *Monto:* S/ ${parsed.amount.toFixed(2)}\n` +
+          `🏷️ *Categoría:* ${parsed.category ? parsed.category.name : "General"}\n` +
+          `💳 *Cuenta:* ${parsed.account ? parsed.account.name : "Principal"}\n` +
+          `📝 *Detalle:* ${parsed.description || userText}\n\n` +
+          `✅ _Registrado automáticamente en Solventa_`;
+
+        await whatsappService.sendWhatsAppMessage(fromNumber, replyMsg);
+      } catch (err) {
+        console.error("[WhatsApp Process Error]", err);
+        await whatsappService.sendWhatsAppMessage(
+          fromNumber,
+          `❌ Error al registrar la transacción: ${err.message}`
+        );
+      }
+    }
+  }
 }));
 
 (async () => {
