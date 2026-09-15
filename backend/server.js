@@ -294,9 +294,19 @@ app.post("/api/whatsapp/webhook", handle(async (req, res) => {
   }
 }));
 
-(async () => {
-  await db.init();
+let dbInitPromise = null;
+app.use(async (req, res, next) => {
+  if (!dbInitPromise) {
+    dbInitPromise = db.init();
+  }
+  await dbInitPromise;
+  next();
+});
+
+if (require.main === module) {
   app.listen(PORT, () => {
     console.log(`Backend corriendo en http://localhost:${PORT}`);
   });
-})();
+}
+
+module.exports = app;
