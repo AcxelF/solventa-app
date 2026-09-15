@@ -160,6 +160,8 @@ async function getSummary({ month, account_id } = {}) {
 
   let totalIngresos = 0;
   let totalGastos = 0;
+  let gastosLiquidos = 0;
+  let gastosCredito = 0;
   const byCategoryMap = new Map();
 
   for (const t of transactions) {
@@ -167,6 +169,12 @@ async function getSummary({ month, account_id } = {}) {
       totalIngresos += t.amount;
     } else {
       totalGastos += t.amount;
+      if (t.account_type === "Tarjeta de crédito") {
+        gastosCredito += t.amount;
+      } else {
+        gastosLiquidos += t.amount;
+      }
+
       const current = byCategoryMap.get(t.category_id) || {
         category_id: t.category_id,
         category: t.category_name,
@@ -184,15 +192,28 @@ async function getSummary({ month, account_id } = {}) {
   );
 
   const totalBalanceRow = await db.get(
-    `SELECT COALESCE(SUM(CASE WHEN type = 'ingreso' THEN amount ELSE -amount END), 0) AS balance
-     FROM transactions ${account_id ? "WHERE account_id = ?" : ""}`,
+    `SELECT COALESCE(SUM(CASE WHEN t.type = 'ingreso' THEN t.amount ELSE -t.amount END), 0) AS liquidBalance
+     FROM transactions t
+     JOIN accounts a ON a.id = t.account_id
+     WHERE a.type != 'Tarjeta de crédito' ${account_id ? "AND t.account_id = ?" : ""}`,
+    account_id ? [account_id] : []
+  );
+
+  const creditDebtRow = await db.get(
+    `SELECT COALESCE(SUM(CASE WHEN t.type = 'gasto' THEN t.amount ELSE -t.amount END), 0) AS creditDebt
+     FROM transactions t
+     JOIN accounts a ON a.id = t.account_id
+     WHERE a.type = 'Tarjeta de crédito' ${account_id ? "AND t.account_id = ?" : ""}`,
     account_id ? [account_id] : []
   );
 
   return {
-    totalBalance: totalBalanceRow.balance,
+    totalBalance: totalBalanceRow ? totalBalanceRow.liquidBalance : 0,
+    creditDebt: creditDebtRow ? Math.max(0, creditDebtRow.creditDebt) : 0,
     totalIngresos,
     totalGastos,
+    gastosLiquidos,
+    gastosCredito,
     balance: totalIngresos - totalGastos,
     byCategory,
   };

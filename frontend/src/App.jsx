@@ -69,6 +69,10 @@ export default function App() {
               S/
             </span>
             <h1 className="text-lg font-semibold text-text">Solventa</h1>
+            <div className="flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+              <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span>WhatsApp Bot</span>
+            </div>
           </div>
 
           <nav className="no-scrollbar order-3 flex w-full min-w-0 items-center gap-1 overflow-x-auto rounded-full bg-surface p-1 lg:order-2 lg:ml-auto lg:w-auto">

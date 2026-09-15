@@ -122,15 +122,29 @@ export default function Dashboard({
 
         <div className="min-w-0 space-y-6">
           <div className="rounded-2xl border border-border bg-surface p-6 shadow-soft">
-            <div className="flex flex-wrap items-end justify-between gap-4">
-              <div>
-                <p className="text-xs font-medium uppercase tracking-wider text-text-muted">
-                  Saldo total
-                </p>
-                <p className="mt-1 font-mono text-4xl font-semibold text-text">
-                  {formatMoney(summary.totalBalance)}
-                </p>
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div className="flex flex-wrap items-center gap-6">
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-wider text-text-muted">
+                    Saldo Líquido Disponible
+                  </p>
+                  <p className="mt-1 font-mono text-3xl sm:text-4xl font-semibold text-text">
+                    {formatMoney(summary.totalBalance)}
+                  </p>
+                </div>
+
+                {summary.creditDebt > 0 && (
+                  <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-2">
+                    <p className="text-[11px] font-medium uppercase tracking-wider text-amber-500 dark:text-amber-400">
+                      Deuda en Tarjetas
+                    </p>
+                    <p className="mt-0.5 font-mono text-lg font-semibold text-amber-600 dark:text-amber-400">
+                      {formatMoney(summary.creditDebt)}
+                    </p>
+                  </div>
+                )}
               </div>
+
               <MonthNavigator month={month} onChange={setMonth} />
             </div>
           </div>

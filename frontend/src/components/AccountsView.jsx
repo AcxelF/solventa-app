@@ -55,46 +55,72 @@ export default function AccountsView({ accounts, onDataChanged }) {
           <EmptyState message="Crea tu primera cuenta para empezar a registrar movimientos." />
         </div>
       ) : (
-        <ul className="mt-4 divide-y divide-border rounded-2xl border border-border bg-surface">
+        <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {accounts.map((account) => {
             const meta = accountTypeMeta(account.type);
+            const isCredit = account.type === "Tarjeta de crédito";
             return (
-              <li key={account.id} className="group flex items-center gap-4 px-4 py-3">
-                <IconBadge color={account.color} icon={meta.icon} size={40} />
+              <div
+                key={account.id}
+                className="group relative flex flex-col justify-between overflow-hidden rounded-2xl border border-border bg-surface p-5 shadow-soft transition hover:-translate-y-0.5 hover:shadow-md hover:border-border-hover"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <IconBadge color={account.color} icon={meta.icon} size={42} />
+                    <div className="min-w-0">
+                      <p className="truncate text-base font-semibold text-text">
+                        {account.name}
+                      </p>
+                      <span
+                        className={`inline-block mt-0.5 rounded-full px-2 py-0.5 text-[10px] font-medium border ${
+                          isCredit
+                            ? "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20"
+                            : "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20"
+                        }`}
+                      >
+                        {isCredit ? "Tarjeta de Crédito" : "Dinero Líquido"}
+                      </span>
+                    </div>
+                  </div>
 
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-text">
-                    {account.name}
-                  </p>
+                  <div className="flex gap-1 opacity-0 transition-opacity duration-150 group-hover:opacity-100">
+                    <button
+                      type="button"
+                      onClick={() => setForm({ editing: account })}
+                      title="Editar"
+                      className="rounded-md p-1.5 text-text-muted hover:bg-surface-2 hover:text-text"
+                    >
+                      <Pencil size={15} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPendingDelete(account)}
+                      title="Eliminar"
+                      className="rounded-md p-1.5 text-text-muted hover:bg-negative/10 hover:text-negative"
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="mt-6 flex items-end justify-between border-t border-border/50 pt-3">
                   <p className="text-xs text-text-muted">{account.type}</p>
-                </div>
-
-                <span className="shrink-0 font-mono text-sm font-semibold text-text">
-                  {formatMoney(account.balance)}
-                </span>
-
-                <div className="flex gap-1 opacity-0 transition-opacity duration-150 group-hover:opacity-100">
-                  <button
-                    type="button"
-                    onClick={() => setForm({ editing: account })}
-                    title="Editar"
-                    className="rounded-md p-1.5 text-text-muted hover:bg-surface-2 hover:text-text"
+                  <span
+                    className={`font-mono text-lg font-bold ${
+                      isCredit
+                        ? account.balance < 0
+                          ? "text-negative"
+                          : "text-text"
+                        : "text-text"
+                    }`}
                   >
-                    <Pencil size={15} />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setPendingDelete(account)}
-                    title="Eliminar"
-                    className="rounded-md p-1.5 text-text-muted hover:bg-negative/10 hover:text-negative"
-                  >
-                    <Trash2 size={15} />
-                  </button>
+                    {formatMoney(account.balance)}
+                  </span>
                 </div>
-              </li>
+              </div>
             );
           })}
-        </ul>
+        </div>
       )}
 
       {form && (
