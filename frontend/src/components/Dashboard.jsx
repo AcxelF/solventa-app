@@ -21,6 +21,7 @@ import StreakWidget from "./StreakWidget.jsx";
 import ComparisonWidget from "./ComparisonWidget.jsx";
 import ClosestGoal from "./ClosestGoal.jsx";
 import TopCategory from "./TopCategory.jsx";
+import FinancialHealthScore from "./FinancialHealthScore.jsx";
 import Modal from "./ui/Modal.jsx";
 import Button from "./ui/Button.jsx";
 
@@ -167,6 +168,8 @@ export default function Dashboard({
             <span className="text-xs font-medium uppercase tracking-wider text-text-muted">Período Seleccionado</span>
             <MonthNavigator month={month} onChange={setMonth} />
           </div>
+
+          <FinancialHealthScore summary={summary} />
 
           <SummaryCards summary={summary} />
 

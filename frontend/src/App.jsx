@@ -64,8 +64,13 @@ export default function App() {
   }, [refreshMeta]);
 
   return (
-    <div className="min-h-screen bg-bg text-text">
-      <header className="border-b border-border bg-bg">
+    <div className="relative min-h-screen bg-bg text-text overflow-x-hidden">
+      {/* Mesh Gradients de fondo */}
+      <div className="fixed -top-24 left-1/4 h-96 w-96 rounded-full bg-emerald-500/10 blur-[120px] pointer-events-none" />
+      <div className="fixed top-1/3 -right-24 h-96 w-96 rounded-full bg-indigo-500/10 blur-[120px] pointer-events-none" />
+      <div className="fixed -bottom-24 left-1/3 h-96 w-96 rounded-full bg-teal-500/10 blur-[120px] pointer-events-none" />
+
+      <header className="sticky top-0 z-40 border-b border-border bg-bg/80 backdrop-blur-md">
         <div className="mx-auto flex w-full max-w-[1920px] flex-wrap items-center justify-between gap-4 px-6 py-4">
           <div className="order-1 flex items-center gap-3">
             <span className="flex h-8 w-9 items-center justify-center rounded-lg bg-text text-sm font-bold text-bg">
