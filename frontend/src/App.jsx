@@ -7,6 +7,7 @@ import {
   ChartPie,
   Target,
   CreditCard,
+  FileText,
   Sun,
   Moon,
   Sunset,
@@ -18,11 +19,13 @@ import BudgetsView from "./components/BudgetsView.jsx";
 import GoalsView from "./components/GoalsView.jsx";
 import CreditCardsView from "./components/CreditCardsView.jsx";
 import TransactionsView from "./components/TransactionsView.jsx";
+import ReportView from "./components/ReportView.jsx";
 import { useTheme } from "./context/ThemeContext.jsx";
 import { fetchAccounts, fetchCategories } from "./api.js";
 
 const NAV = [
   { key: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { key: "reports", label: "Informe PDF", icon: FileText },
   { key: "transactions", label: "Transacciones", icon: ArrowLeftRight },
   { key: "accounts", label: "Cuentas", icon: Landmark },
   { key: "credit-cards", label: "Tarjetas", icon: CreditCard },
@@ -135,6 +138,7 @@ export default function App() {
             onNavigate={navigate}
           />
         )}
+        {!loading && view === "reports" && <ReportView />}
         {!loading && view === "transactions" && (
           <TransactionsView
             accounts={accounts}
