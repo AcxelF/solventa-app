@@ -47,6 +47,48 @@ async function sendWhatsAppMessage(toPhoneNumber, messageText) {
   }
 }
 
+async function downloadWhatsAppMedia(mediaId) {
+  const token = process.env.WHATSAPP_TOKEN;
+
+  if (!token) {
+    console.warn("[WhatsApp Service] Falta WHATSAPP_TOKEN en .env");
+    return null;
+  }
+
+  try {
+    const metaRes = await fetch(`https://graph.facebook.com/v21.0/${mediaId}`, {
+      headers: { "Authorization": `Bearer ${token}` },
+    });
+
+    if (!metaRes.ok) {
+      console.error("[WhatsApp Service Error] No se pudo obtener metadata del media:", await metaRes.text());
+      return null;
+    }
+
+    const meta = await metaRes.json();
+
+    const fileRes = await fetch(meta.url, {
+      headers: { "Authorization": `Bearer ${token}` },
+    });
+
+    if (!fileRes.ok) {
+      console.error("[WhatsApp Service Error] No se pudo descargar el archivo de media.");
+      return null;
+    }
+
+    const arrayBuffer = await fileRes.arrayBuffer();
+
+    return {
+      buffer: Buffer.from(arrayBuffer),
+      mimeType: meta.mime_type || "audio/ogg",
+    };
+  } catch (error) {
+    console.error("[WhatsApp Service Error]", error);
+    return null;
+  }
+}
+
 module.exports = {
   sendWhatsAppMessage,
+  downloadWhatsAppMedia,
 };

@@ -238,6 +238,34 @@ app.get("/api/whatsapp/webhook", (req, res) => {
   return res.sendStatus(400);
 });
 
+async function handleParsedTransaction(fromNumber, parsed, fallbackDescription) {
+  if (!parsed) {
+    await whatsappService.sendWhatsAppMessage(
+      fromNumber,
+      "⚠️ No pude entender el monto o concepto. Ejemplo de formato:\n\n• *Gasté 25 soles en almuerzo con Yape*\n• *Ingreso 1500 sueldo BCP*"
+    );
+    return;
+  }
+
+  await transactionsService.createTransaction({
+    account_id: parsed.account_id,
+    category_id: parsed.category_id,
+    type: parsed.type,
+    amount: parsed.amount,
+    description: parsed.description || fallbackDescription,
+  });
+
+  const iconType = parsed.type === "ingreso" ? "📈 *Ingreso Registrado*" : "💸 *Gasto Registrado*";
+  const replyMsg = `${iconType}\n\n` +
+    `💰 *Monto:* S/ ${parsed.amount.toFixed(2)}\n` +
+    `🏷️ *Categoría:* ${parsed.category ? parsed.category.name : "General"}\n` +
+    `💳 *Cuenta:* ${parsed.account ? parsed.account.name : "Principal"}\n` +
+    `📝 *Detalle:* ${parsed.description || fallbackDescription}\n\n` +
+    `✅ _Registrado automáticamente en Solventa_`;
+
+  await whatsappService.sendWhatsAppMessage(fromNumber, replyMsg);
+}
+
 app.post("/api/whatsapp/webhook", handle(async (req, res) => {
   const body = req.body;
 
@@ -255,36 +283,33 @@ app.post("/api/whatsapp/webhook", handle(async (req, res) => {
 
       try {
         const parsed = await whatsappParser.parseTransactionFromText(userText);
-
-        if (!parsed) {
-          await whatsappService.sendWhatsAppMessage(
-            fromNumber,
-            "⚠️ No pude entender el monto o concepto. Ejemplo de formato:\n\n• *Gasté 25 soles en almuerzo con Yape*\n• *Ingreso 1500 sueldo BCP*"
-          );
-        } else {
-          await transactionsService.createTransaction({
-            account_id: parsed.account_id,
-            category_id: parsed.category_id,
-            type: parsed.type,
-            amount: parsed.amount,
-            description: parsed.description || userText,
-          });
-
-          const iconType = parsed.type === "ingreso" ? "📈 *Ingreso Registrado*" : "💸 *Gasto Registrado*";
-          const replyMsg = `${iconType}\n\n` +
-            `💰 *Monto:* S/ ${parsed.amount.toFixed(2)}\n` +
-            `🏷️ *Categoría:* ${parsed.category ? parsed.category.name : "General"}\n` +
-            `💳 *Cuenta:* ${parsed.account ? parsed.account.name : "Principal"}\n` +
-            `📝 *Detalle:* ${parsed.description || userText}\n\n` +
-            `✅ _Registrado automáticamente en Solventa_`;
-
-          await whatsappService.sendWhatsAppMessage(fromNumber, replyMsg);
-        }
+        await handleParsedTransaction(fromNumber, parsed, userText);
       } catch (err) {
         console.error("[WhatsApp Process Error]", err);
         await whatsappService.sendWhatsAppMessage(
           fromNumber,
           `❌ Error al registrar la transacción: ${err.message}`
+        );
+      }
+    } else if (message && message.type === "audio") {
+      const fromNumber = message.from;
+      const mediaId = message.audio.id;
+
+      console.log(`[WhatsApp Webhook] Audio recibido de ${fromNumber} (media_id: ${mediaId})`);
+
+      try {
+        const media = await whatsappService.downloadWhatsAppMedia(mediaId);
+        if (!media) {
+          throw new Error("No pude descargar la nota de voz.");
+        }
+
+        const parsed = await whatsappParser.parseTransactionFromAudio(media.buffer, media.mimeType);
+        await handleParsedTransaction(fromNumber, parsed, "Gasto registrado por nota de voz");
+      } catch (err) {
+        console.error("[WhatsApp Process Error]", err);
+        await whatsappService.sendWhatsAppMessage(
+          fromNumber,
+          `❌ Error al procesar la nota de voz: ${err.message}`
         );
       }
     }
