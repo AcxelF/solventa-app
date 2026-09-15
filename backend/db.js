@@ -16,7 +16,12 @@ if (!isFileUrl && !authToken) {
   );
 }
 
-const db = createClient({ url, authToken });
+let normalizedUrl = url;
+if (typeof normalizedUrl === "string" && normalizedUrl.startsWith("libsql://")) {
+  normalizedUrl = normalizedUrl.replace("libsql://", "https://");
+}
+
+const db = createClient({ url: normalizedUrl, authToken });
 
 // Helpers asíncronos con una API parecida a better-sqlite3 (get/all/run),
 // para que los servicios mantengan el mismo estilo de consulta.

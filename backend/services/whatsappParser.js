@@ -139,8 +139,13 @@ async function parseTransactionFromText(userText) {
     throw new Error("No hay cuentas o categorías configuradas en la app.");
   }
 
-  // Intentar con Gemini AI si está disponible
-  let result = await parseMessageWithGemini(userText, categories, accounts);
+  // Intentar con Gemini AI si está disponible (con fallback seguro)
+  let result = null;
+  try {
+    result = await parseMessageWithGemini(userText, categories, accounts);
+  } catch (err) {
+    console.error("[WhatsApp Parser Gemini Fallback]", err);
+  }
 
   // Fallback a Regex inteligente
   if (!result) {
