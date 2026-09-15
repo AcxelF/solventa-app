@@ -76,7 +76,14 @@ export default function Dashboard({
     load(month)
       .then(() => setLoading(false))
       .catch(() => setLoading(false));
-  }, [month, load]);
+
+    const interval = setInterval(() => {
+      load(month).catch(() => {});
+      if (onDataChanged) onDataChanged();
+    }, 4000);
+
+    return () => clearInterval(interval);
+  }, [month, load, onDataChanged]);
 
   async function handleSave(payload) {
     if (form?.editing) {
