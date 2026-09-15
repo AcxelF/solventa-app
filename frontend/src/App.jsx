@@ -69,6 +69,7 @@ export default function App() {
               S/
             </span>
             <h1 className="text-lg font-semibold text-text">Solventa</h1>
+            <span className="text-sm font-bold text-red-500 bg-red-100 dark:bg-red-950 px-2 py-0.5 rounded">prueba</span>
           </div>
 
           <nav className="no-scrollbar order-3 flex w-full min-w-0 items-center gap-1 overflow-x-auto rounded-full bg-surface p-1 lg:order-2 lg:ml-auto lg:w-auto">
