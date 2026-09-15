@@ -36,7 +36,7 @@ async function sendWhatsAppMessage(toPhoneNumber, messageText) {
 
     if (!response.ok) {
       console.error("[WhatsApp Service Error]", data);
-      return false;
+      throw new Error(data?.error?.message || `Error ${response.status} al responder por Meta API`);
     }
 
     console.log("[WhatsApp Service] Mensaje enviado con éxito:", data);
