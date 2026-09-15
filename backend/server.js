@@ -241,8 +241,6 @@ app.get("/api/whatsapp/webhook", (req, res) => {
 app.post("/api/whatsapp/webhook", handle(async (req, res) => {
   const body = req.body;
 
-  res.status(200).send("EVENT_RECEIVED");
-
   if (body.object === "whatsapp_business_account") {
     const entry = body.entry?.[0];
     const changes = entry?.changes?.[0];
@@ -263,26 +261,25 @@ app.post("/api/whatsapp/webhook", handle(async (req, res) => {
             fromNumber,
             "⚠️ No pude entender el monto o concepto. Ejemplo de formato:\n\n• *Gasté 25 soles en almuerzo con Yape*\n• *Ingreso 1500 sueldo BCP*"
           );
-          return;
+        } else {
+          await transactionsService.createTransaction({
+            account_id: parsed.account_id,
+            category_id: parsed.category_id,
+            type: parsed.type,
+            amount: parsed.amount,
+            description: parsed.description || userText,
+          });
+
+          const iconType = parsed.type === "ingreso" ? "📈 *Ingreso Registrado*" : "💸 *Gasto Registrado*";
+          const replyMsg = `${iconType}\n\n` +
+            `💰 *Monto:* S/ ${parsed.amount.toFixed(2)}\n` +
+            `🏷️ *Categoría:* ${parsed.category ? parsed.category.name : "General"}\n` +
+            `💳 *Cuenta:* ${parsed.account ? parsed.account.name : "Principal"}\n` +
+            `📝 *Detalle:* ${parsed.description || userText}\n\n` +
+            `✅ _Registrado automáticamente en Solventa_`;
+
+          await whatsappService.sendWhatsAppMessage(fromNumber, replyMsg);
         }
-
-        await transactionsService.createTransaction({
-          account_id: parsed.account_id,
-          category_id: parsed.category_id,
-          type: parsed.type,
-          amount: parsed.amount,
-          description: parsed.description || userText,
-        });
-
-        const iconType = parsed.type === "ingreso" ? "📈 *Ingreso Registrado*" : "💸 *Gasto Registrado*";
-        const replyMsg = `${iconType}\n\n` +
-          `💰 *Monto:* S/ ${parsed.amount.toFixed(2)}\n` +
-          `🏷️ *Categoría:* ${parsed.category ? parsed.category.name : "General"}\n` +
-          `💳 *Cuenta:* ${parsed.account ? parsed.account.name : "Principal"}\n` +
-          `📝 *Detalle:* ${parsed.description || userText}\n\n` +
-          `✅ _Registrado automáticamente en Solventa_`;
-
-        await whatsappService.sendWhatsAppMessage(fromNumber, replyMsg);
       } catch (err) {
         console.error("[WhatsApp Process Error]", err);
         await whatsappService.sendWhatsAppMessage(
@@ -292,6 +289,8 @@ app.post("/api/whatsapp/webhook", handle(async (req, res) => {
       }
     }
   }
+
+  res.status(200).send("EVENT_RECEIVED");
 }));
 
 let dbInitPromise = null;
