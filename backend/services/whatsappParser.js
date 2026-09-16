@@ -5,6 +5,30 @@ const categoriesService = require("./categories");
  * Servicio para interpretar mensajes en lenguaje natural e identificarlos como transacciones.
  */
 
+const CATEGORY_GUIDE = `
+Guía de qué categoría de gasto usar según el concepto (úsala como referencia, no es una lista cerrada):
+- Alimentación: almuerzo, cena, desayuno, restaurante, delivery, mercado, supermercado, comida.
+- Transporte: taxi, uber, cabify, pasaje, combi, gasolina, peaje, estacionamiento.
+- Vivienda: alquiler, renta, luz, agua, internet, gas, mantenimiento.
+- Entretenimiento: cine, salida, fiesta, bar, discoteca, videojuego, concierto.
+- Salud: farmacia, doctor, médico, medicina, consulta, seguro, dentista.
+- Educación: curso, universidad, instituto, libros, colegio, matrícula.
+- streaming: suscripciones de Netflix, Spotify, Disney+, YouTube Premium, etc.
+- Otros: cualquier gasto que no encaje claramente en las anteriores.
+
+Para ingresos usa: Sueldo (pago de trabajo formal), Freelance (trabajo independiente), Regalo (dinero recibido de otra persona), Otros (cualquier otro ingreso).
+`;
+
+function buildTransactionRules(unitLabel) {
+  return `
+Reglas:
+- Si ${unitLabel} indica pagar, gastar, comprar, costo o salida de dinero -> "type": "gasto".
+- Si ${unitLabel} indica recibir, cobro, ingreso, abono, sueldo, transferencia a favor -> "type": "ingreso".
+- Elije siempre la category_id que mejor coincida con el concepto, usando la guía de arriba. Debe ser de tipo coherente ("gasto" o "ingreso"). Si ninguna encaja bien, usa la categoría "Otros" del tipo correspondiente — nunca dejes de responder por no encontrar una categoría exacta.
+- Elije la account_id solo si ${unitLabel} menciona claramente el nombre de una cuenta de la lista (ej. "con Yape", "en mi Scotiabank"). Si no menciona ninguna o no coincide con la lista, usa la primera cuenta disponible.
+`;
+}
+
 async function parseMessageWithGemini(userText, categories, accounts) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return null;
@@ -18,15 +42,15 @@ async function parseMessageWithGemini(userText, categories, accounts) {
     .join("\n");
 
   const prompt = `
-Eres un asistente financiero que analiza mensajes de WhatsApp para registrar ingresos y gastos.
+Eres un asistente financiero peruano que analiza mensajes de WhatsApp para registrar ingresos y gastos.
 Analiza el siguiente texto y devuelve EXCLUSIVAMENTE un objeto JSON válido (sin bloques de markdown ni texto extra).
 
 Texto del usuario: "${userText}"
 
-Categorías disponibles:
+Categorías disponibles (usa SIEMPRE uno de estos IDs, nunca inventes uno):
 ${categoriesPrompt}
-
-Cuentas disponibles:
+${CATEGORY_GUIDE}
+Cuentas disponibles (usa SIEMPRE uno de estos IDs, nunca inventes uno):
 ${accountsPrompt}
 
 Estructura JSON esperada:
@@ -37,13 +61,7 @@ Estructura JSON esperada:
   "account_id": id_cuenta_elegida,
   "description": "breve descripcion limpia extraida del mensaje"
 }
-
-Reglas:
-- Si el texto indica pagar, gastar, comprar, costo o salida de dinero -> "type": "gasto".
-- Si el texto indica recibir, cobro, ingreso, abono, sueldo, transferencia a favor -> "type": "ingreso".
-- Elije la category_id que mejor coincida con el concepto. Debe ser de tipo coherente ("gasto" o "ingreso").
-- Elije la account_id mencionada (ej: Yape, Plin, BCP, Efectivo). Si no menciona ninguna, usa la primera cuenta disponible.
-- Si no hay un monto válido en el texto, devuelve JSON con "error": "No se encontró el monto".
+${buildTransactionRules("el texto")}- Si no hay un monto válido en el texto, devuelve JSON con "error": "No se encontró el monto".
 `;
 
   try {
@@ -53,6 +71,9 @@ Reglas:
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: {
+          temperature: 0,
+        },
       }),
     });
 
@@ -89,16 +110,16 @@ Eres un asistente financiero peruano que escucha notas de voz de WhatsApp para r
 
 Primero transcribe mentalmente el audio completo, con especial cuidado en los números y montos de dinero
 dichos en voz alta (ej: "veinticinco soles" = 25, "treinta y cinco con cincuenta" = 35.50, "cien lucas" = 100,
-"quince con noventa" = 15.90). El audio puede tener ruido de fondo o acento peruano; usa el contexto para
-inferir el monto y el concepto aunque no se escuche perfecto — evita responder "error" salvo que sea
-realmente imposible identificar un monto.
+"quince con noventa" = 15.90). El audio puede tener ruido de fondo, palabras cortas poco claras o acento
+peruano; usa el contexto de toda la frase para inferir el monto y el concepto aunque una palabra puntual no
+se escuche perfecto — evita responder "error" salvo que sea realmente imposible identificar un monto.
 
 Después de transcribir, devuelve EXCLUSIVAMENTE un objeto JSON válido (sin bloques de markdown ni texto extra).
 
-Categorías disponibles:
+Categorías disponibles (usa SIEMPRE uno de estos IDs, nunca inventes uno):
 ${categoriesPrompt}
-
-Cuentas disponibles:
+${CATEGORY_GUIDE}
+Cuentas disponibles (usa SIEMPRE uno de estos IDs, nunca inventes uno):
 ${accountsPrompt}
 
 Estructura JSON esperada:
@@ -109,13 +130,7 @@ Estructura JSON esperada:
   "account_id": id_cuenta_elegida,
   "description": "breve descripcion limpia extraida del audio"
 }
-
-Reglas:
-- Si el audio indica pagar, gastar, comprar, costo o salida de dinero -> "type": "gasto".
-- Si el audio indica recibir, cobro, ingreso, abono, sueldo, transferencia a favor -> "type": "ingreso".
-- Elije la category_id que mejor coincida con el concepto. Debe ser de tipo coherente ("gasto" o "ingreso").
-- Elije la account_id mencionada (ej: Yape, Plin, BCP, Efectivo). Si no menciona ninguna, usa la primera cuenta disponible.
-- Si de verdad no se distingue ningún monto en el audio, devuelve JSON con "error": "No se encontró el monto".
+${buildTransactionRules("el audio")}- Si de verdad no se distingue ningún monto en el audio, devuelve JSON con "error": "No se encontró el monto".
 `;
 
   // Meta suele mandar "audio/ogg; codecs=opus"; Gemini solo acepta el mime type base.
