@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState } from "react";
 
-const THEMES = ["light", "dark", "sepia"];
+const THEMES = ["light", "dark"];
 
 const ThemeContext = createContext({
   theme: "light",
@@ -23,8 +23,8 @@ export function ThemeProvider({ children }) {
 
   useEffect(() => {
     const root = document.documentElement;
-    root.classList.remove("dark", "sepia");
-    if (theme !== "light") root.classList.add(theme);
+    root.classList.remove("dark");
+    if (theme === "dark") root.classList.add("dark");
     try {
       localStorage.setItem("solventa-theme", theme);
     } catch {

@@ -3,36 +3,25 @@
 @tailwind utilities;
 
 :root {
-  --bg: 255 255 255;
-  --surface: 250 250 249;
-  --surface-2: 242 242 240;
-  --text: 55 53 47;
-  --text-secondary: 120 119 116;
-  --text-muted: 155 154 151;
-  --border: 232 232 230;
-  --shadow-soft: 0 1px 2px rgba(15, 15, 15, 0.04), 0 4px 16px rgba(15, 15, 15, 0.06);
+  --bg: 248 250 252;
+  --surface: 255 255 255;
+  --surface-2: 241 245 249;
+  --text: 15 23 42;
+  --text-secondary: 71 85 105;
+  --text-muted: 148 163 184;
+  --border: 226 232 240;
+  --shadow-soft: 0 1px 3px rgba(15, 23, 42, 0.04), 0 8px 24px -4px rgba(15, 23, 42, 0.06);
 }
 
 .dark {
-  --bg: 25 25 25;
-  --surface: 47 47 47;
-  --surface-2: 59 59 59;
-  --text: 241 240 236;
-  --text-secondary: 155 155 155;
-  --text-muted: 110 110 110;
-  --border: 60 60 60;
-  --shadow-soft: 0 1px 2px rgba(0, 0, 0, 0.35), 0 6px 20px rgba(0, 0, 0, 0.45);
-}
-
-.sepia {
-  --bg: 244 236 216;
-  --surface: 235 224 199;
-  --surface-2: 226 212 182;
-  --text: 59 47 30;
-  --text-secondary: 107 93 72;
-  --text-muted: 138 123 99;
-  --border: 214 199 166;
-  --shadow-soft: 0 1px 2px rgba(120, 90, 40, 0.08), 0 4px 16px rgba(120, 90, 40, 0.12);
+  --bg: 24 24 27;
+  --surface: 39 39 42;
+  --surface-2: 52 52 56;
+  --text: 244 244 245;
+  --text-secondary: 161 161 170;
+  --text-muted: 113 113 122;
+  --border: 63 63 70;
+  --shadow-soft: 0 1px 3px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.5);
 }
 
 @layer base {

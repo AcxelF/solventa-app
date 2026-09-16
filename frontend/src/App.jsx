@@ -10,7 +10,6 @@ import {
   FileText,
   Sun,
   Moon,
-  Sunset,
 } from "lucide-react";
 import Dashboard from "./components/Dashboard.jsx";
 import AccountsView from "./components/AccountsView.jsx";
@@ -96,11 +95,10 @@ export default function App() {
             ))}
           </nav>
 
-          <div className="order-2 flex shrink-0 gap-1 rounded-full bg-surface p-1 lg:order-3">
+          <div className="order-2 flex shrink-0 items-center gap-1 rounded-full bg-surface p-1 border border-border lg:order-3">
             {[
               { key: "light", label: "Modo claro", icon: Sun },
               { key: "dark", label: "Modo oscuro", icon: Moon },
-              { key: "sepia", label: "Modo sepia", icon: Sunset },
             ].map(({ key, label, icon: Icon }) => (
               <button
                 key={key}
@@ -108,13 +106,14 @@ export default function App() {
                 onClick={() => setTheme(key)}
                 aria-label={label}
                 title={label}
-                className={`rounded-full p-1.5 transition ${
+                className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium transition ${
                   theme === key
-                    ? "bg-bg text-text shadow-sm"
+                    ? "bg-bg text-text shadow-sm border border-border"
                     : "text-text-secondary hover:text-text"
                 }`}
               >
-                <Icon size={15} />
+                <Icon size={14} />
+                <span className="hidden sm:inline">{key === "light" ? "Claro" : "Oscuro"}</span>
               </button>
             ))}
           </div>
