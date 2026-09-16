@@ -143,11 +143,19 @@ export default function CreditCardDetail({
                 className="flex items-center gap-3 px-3 py-2.5"
               >
                 <div className="min-w-0 flex-1">
-                  <p className="text-xs text-text-secondary">
+                  <p className="flex items-center gap-1.5 text-xs text-text-secondary">
                     {formatDateShort(transaction.date)}
+                    {transaction.total_installments && (
+                      <span className="rounded-full bg-surface-2 px-1.5 py-0.5 text-[10px] font-semibold text-text-muted">
+                        Cuota {transaction.installment_number}/{transaction.total_installments}
+                      </span>
+                    )}
                   </p>
                   <p className="truncate text-sm text-text">
-                    {transaction.description || transaction.category_name}
+                    {(transaction.description || transaction.category_name).replace(
+                      /\s*\(cuota \d+\/\d+\)\s*$/i,
+                      ""
+                    )}
                   </p>
                 </div>
                 <span

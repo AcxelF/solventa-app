@@ -5,6 +5,7 @@ import {
   fetchTransactions,
   fetchDashboardWidgets,
   createTransaction,
+  createInstallmentPurchase,
   updateTransaction,
   deleteTransaction,
 } from "../api.js";
@@ -24,6 +25,7 @@ import TopCategory from "./TopCategory.jsx";
 import FinancialHealthScore from "./FinancialHealthScore.jsx";
 import Modal from "./ui/Modal.jsx";
 import Button from "./ui/Button.jsx";
+import TrendFlash from "./ui/TrendFlash.jsx";
 
 const PREVIEW_LIMIT = 5;
 
@@ -89,6 +91,9 @@ export default function Dashboard({
   async function handleSave(payload) {
     if (form?.editing) {
       await updateTransaction(form.editing.id, payload);
+    } else if (payload.isInstallment) {
+      const { isInstallment, ...installmentPayload } = payload;
+      await createInstallmentPurchase(installmentPayload);
     } else {
       await createTransaction(payload);
     }
@@ -130,8 +135,9 @@ export default function Dashboard({
                   <p className="text-xs font-medium uppercase tracking-wider text-text-muted">
                     Saldo Líquido Disponible
                   </p>
-                  <p className="mt-1 font-mono text-3xl sm:text-4xl font-semibold text-text">
+                  <p className="mt-1 flex items-center gap-2 font-mono text-3xl sm:text-4xl font-semibold text-text">
                     {formatMoney(summary.totalBalance)}
+                    <TrendFlash value={summary.totalBalance} />
                   </p>
                 </div>
                 <div className="rounded-xl bg-emerald-500/10 p-3 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
@@ -150,8 +156,9 @@ export default function Dashboard({
                   <p className="text-xs font-medium uppercase tracking-wider text-amber-600 dark:text-amber-400">
                     Deuda en Tarjetas
                   </p>
-                  <p className="mt-1 font-mono text-3xl sm:text-4xl font-semibold text-amber-600 dark:text-amber-400">
+                  <p className="mt-1 flex items-center gap-2 font-mono text-3xl sm:text-4xl font-semibold text-amber-600 dark:text-amber-400">
                     {formatMoney(summary.creditDebt || 0)}
+                    <TrendFlash value={summary.creditDebt || 0} invert />
                   </p>
                 </div>
                 <div className="rounded-xl bg-amber-500/10 p-3 text-amber-600 dark:text-amber-400 border border-amber-500/20">

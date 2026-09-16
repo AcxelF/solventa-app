@@ -79,6 +79,9 @@ const SCHEMA = `
     amount REAL NOT NULL,
     description TEXT,
     date TEXT NOT NULL,
+    installment_group_id TEXT,
+    installment_number INTEGER,
+    total_installments INTEGER,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
 
@@ -139,6 +142,22 @@ async function migrate() {
   for (const [name, type] of additions) {
     if (!columns.includes(name)) {
       await run(`ALTER TABLE accounts ADD COLUMN ${name} ${type}`);
+    }
+  }
+
+  const transactionColumns = (await all("PRAGMA table_info(transactions)")).map(
+    (column) => column.name
+  );
+
+  const transactionAdditions = [
+    ["installment_group_id", "TEXT"],
+    ["installment_number", "INTEGER"],
+    ["total_installments", "INTEGER"],
+  ];
+
+  for (const [name, type] of transactionAdditions) {
+    if (!transactionColumns.includes(name)) {
+      await run(`ALTER TABLE transactions ADD COLUMN ${name} ${type}`);
     }
   }
 }

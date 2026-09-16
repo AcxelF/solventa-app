@@ -3,6 +3,7 @@ import { Plus, RotateCcw } from "lucide-react";
 import {
   fetchTransactions,
   createTransaction,
+  createInstallmentPurchase,
   updateTransaction,
   deleteTransaction,
 } from "../api.js";
@@ -67,6 +68,9 @@ export default function TransactionsView({
   async function handleSave(payload) {
     if (form?.editing) {
       await updateTransaction(form.editing.id, payload);
+    } else if (payload.isInstallment) {
+      const { isInstallment, ...installmentPayload } = payload;
+      await createInstallmentPurchase(installmentPayload);
     } else {
       await createTransaction(payload);
     }

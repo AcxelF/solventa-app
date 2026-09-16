@@ -31,8 +31,14 @@ export default function TransactionForm({
   );
   const [date, setDate] = useState(initial?.date ?? todayISO());
   const [description, setDescription] = useState(initial?.description ?? "");
+  const [isInstallment, setIsInstallment] = useState(false);
+  const [totalInstallments, setTotalInstallments] = useState("2");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+
+  const selectedAccount = accounts.find((a) => a.id === Number(accountId));
+  const isCreditCard = selectedAccount?.type === "Tarjeta de crédito";
+  const canUseInstallments = !initial && type === "gasto" && isCreditCard;
 
   const typeCategories = categories.filter((c) => c.type === type);
   const accountOptions = accounts.map((account) => {
@@ -70,16 +76,39 @@ export default function TransactionForm({
       return;
     }
 
+    const parsedInstallments = Number(totalInstallments);
+    if (
+      canUseInstallments &&
+      isInstallment &&
+      (!Number.isInteger(parsedInstallments) || parsedInstallments < 2)
+    ) {
+      setError("El número de cuotas debe ser un entero de al menos 2.");
+      return;
+    }
+
     setSaving(true);
     try {
-      await onSubmit({
-        account_id: Number(accountId),
-        category_id: Number(categoryId),
-        type,
-        amount: parsedAmount,
-        date,
-        description: description.trim() || undefined,
-      });
+      if (canUseInstallments && isInstallment) {
+        await onSubmit({
+          isInstallment: true,
+          account_id: Number(accountId),
+          category_id: Number(categoryId),
+          type,
+          total_amount: parsedAmount,
+          total_installments: parsedInstallments,
+          date,
+          description: description.trim() || undefined,
+        });
+      } else {
+        await onSubmit({
+          account_id: Number(accountId),
+          category_id: Number(categoryId),
+          type,
+          amount: parsedAmount,
+          date,
+          description: description.trim() || undefined,
+        });
+      }
     } catch (err) {
       setError(err.message);
       setSaving(false);
@@ -150,7 +179,7 @@ export default function TransactionForm({
         />
       </Field>
 
-      <Field label="Monto">
+      <Field label={isInstallment && canUseInstallments ? "Monto total de la compra" : "Monto"}>
         <TextInput
           type="number"
           step="0.01"
@@ -162,7 +191,39 @@ export default function TransactionForm({
         />
       </Field>
 
-      <Field label="Fecha">
+      {canUseInstallments && (
+        <div className="rounded-xl border border-border bg-surface-2 p-3">
+          <label className="flex items-center gap-2 text-sm font-medium text-text">
+            <input
+              type="checkbox"
+              checked={isInstallment}
+              onChange={(e) => setIsInstallment(e.target.checked)}
+              className="h-4 w-4 rounded border-border accent-text"
+            />
+            Es una compra en cuotas
+          </label>
+
+          {isInstallment && (
+            <div className="mt-3">
+              <Field
+                label="Número de cuotas"
+                hint="Se crea un movimiento por cada cuota, uno por mes, empezando en la fecha de abajo."
+              >
+                <TextInput
+                  type="number"
+                  step="1"
+                  min="2"
+                  value={totalInstallments}
+                  onChange={(e) => setTotalInstallments(e.target.value)}
+                  placeholder="6"
+                />
+              </Field>
+            </div>
+          )}
+        </div>
+      )}
+
+      <Field label={isInstallment && canUseInstallments ? "Fecha de la primera cuota" : "Fecha"}>
         <TextInput
           type="date"
           value={date}

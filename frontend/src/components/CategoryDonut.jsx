@@ -4,6 +4,27 @@ import { formatMoney } from "../utils/format.js";
 import IconBadge from "./ui/IconBadge.jsx";
 import EmptyState from "./ui/EmptyState.jsx";
 
+function CustomTooltip({ active, payload }) {
+  if (active && payload && payload.length) {
+    const data = payload[0];
+    return (
+      <div className="rounded-xl border border-border bg-surface px-3 py-2 shadow-xl text-xs font-medium">
+        <div className="flex items-center gap-2">
+          <span
+            className="h-2.5 w-2.5 rounded-full"
+            style={{ backgroundColor: data.payload?.color || data.fill }}
+          />
+          <span className="text-text-muted">{data.name}:</span>
+          <span className="font-mono font-bold text-text">
+            {formatMoney(data.value)}
+          </span>
+        </div>
+      </div>
+    );
+  }
+  return null;
+}
+
 export default function CategoryDonut({ data }) {
   if (!data.length) {
     return (
@@ -40,17 +61,7 @@ export default function CategoryDonut({ data }) {
                 <Cell key={entry.category_id} fill={entry.color} />
               ))}
             </Pie>
-            <Tooltip
-              formatter={(value) => formatMoney(value)}
-              contentStyle={{
-                fontFamily: "Inter, sans-serif",
-                backgroundColor: "var(--surface)",
-                border: "1px solid var(--border)",
-                borderRadius: "12px",
-                fontSize: "13px",
-                color: "var(--text)",
-              }}
-            />
+            <Tooltip content={<CustomTooltip />} />
           </PieChart>
         </ResponsiveContainer>
       </div>

@@ -101,6 +101,10 @@ app.post("/api/transactions", handle(async (req, res) => {
   res.status(201).json(await transactionsService.createTransaction(req.body));
 }));
 
+app.post("/api/transactions/installments", handle(async (req, res) => {
+  res.status(201).json(await transactionsService.createInstallmentPurchase(req.body));
+}));
+
 app.put("/api/transactions/:id", handle(async (req, res) => {
   const transaction = await transactionsService.updateTransaction(Number(req.params.id), req.body);
   if (!transaction) return res.status(404).json({ error: "Transacción no encontrada." });

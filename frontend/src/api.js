@@ -107,6 +107,15 @@ export async function createTransaction(payload) {
   return handleResponse(res);
 }
 
+export async function createInstallmentPurchase(payload) {
+  const res = await fetch(`${API_BASE}/transactions/installments`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  return handleResponse(res);
+}
+
 export async function updateTransaction(id, payload) {
   const res = await fetch(`${API_BASE}/transactions/${id}`, {
     method: "PUT",

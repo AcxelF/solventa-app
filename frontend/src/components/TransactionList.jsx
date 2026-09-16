@@ -42,16 +42,28 @@ export default function TransactionList({
       {transactions.map((t) => {
         const Icon = categoryIcon(t.category_icon);
         const isIngreso = t.type === "ingreso";
+        const isInstallment = Boolean(t.total_installments);
+        // El detalle guarda "(cuota X/N)" para el respaldo de WhatsApp; en la
+        // lista se muestra aparte como badge, así que no se repite en texto.
+        const displayDescription = isInstallment
+          ? (t.description || "").replace(/\s*\(cuota \d+\/\d+\)\s*$/i, "")
+          : t.description;
+
         return (
           <li key={t.id} className="group flex items-center gap-3 px-4 py-3">
             <IconBadge color={t.category_color} icon={Icon} size={36} />
 
             <div className="min-w-0 flex-1">
-              <p className="break-words text-sm font-medium text-text">
+              <p className="flex items-center gap-1.5 break-words text-sm font-medium text-text">
                 {t.category_name}
+                {isInstallment && (
+                  <span className="rounded-full bg-surface-2 px-1.5 py-0.5 text-[10px] font-semibold text-text-muted">
+                    Cuota {t.installment_number}/{t.total_installments}
+                  </span>
+                )}
               </p>
               <p className="break-words text-xs text-text-muted">
-                {t.description ? `${t.description} · ` : ""}
+                {displayDescription ? `${displayDescription} · ` : ""}
                 {t.date} · {t.account_name}
               </p>
             </div>

@@ -125,6 +125,80 @@ async function createTransaction({
   return getTransaction(result.lastInsertRowid);
 }
 
+// Suma `delta` meses a una fecha ISO (YYYY-MM-DD), recortando al último día
+// real del mes de destino (ej. 31 ene + 1 mes -> 28/29 feb, no 3 marzo).
+function addMonthsISO(dateISO, delta) {
+  const [y, m, d] = dateISO.split("-").map(Number);
+  const totalMonths = m - 1 + delta;
+  const year = y + Math.floor(totalMonths / 12);
+  const month = ((totalMonths % 12) + 12) % 12 + 1;
+  const lastDay = new Date(year, month, 0).getDate();
+  const day = Math.min(d, lastDay);
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+// Crea una compra en cuotas: una transacción por cada cuota, una por mes,
+// cada una con el monto de esa cuota (no el total). Así el saldo/resumen
+// mensual y el ciclo de la tarjeta (que suman por fecha) solo cuentan la
+// cuota que corresponde a cada mes, sin lógica especial en otros lugares.
+async function createInstallmentPurchase({
+  account_id,
+  category_id,
+  type,
+  total_amount,
+  total_installments,
+  description,
+  date,
+} = {}) {
+  if (!Number.isInteger(total_installments) || total_installments < 2) {
+    throw new ValidationError("El número de cuotas debe ser un entero de al menos 2.");
+  }
+  await validateTransaction({ account_id, category_id, type, amount: total_amount });
+
+  const startDate = date || getTodayISO();
+  const groupId = `inst_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+  // Reparte el total en cuotas iguales, ajustando centavos en la última
+  // cuota para que la suma exacta del total no se pierda por redondeo.
+  const baseAmount = Math.floor((total_amount / total_installments) * 100) / 100;
+  const roundedTotal = Math.round(baseAmount * 100) * total_installments;
+  const remainder = Math.round(total_amount * 100) - roundedTotal;
+
+  const createdIds = [];
+  for (let i = 0; i < total_installments; i++) {
+    const isLast = i === total_installments - 1;
+    const amount = isLast ? baseAmount + remainder / 100 : baseAmount;
+    const installmentDate = addMonthsISO(startDate, i);
+    const installmentDescription = description
+      ? `${description} (cuota ${i + 1}/${total_installments})`
+      : `Cuota ${i + 1}/${total_installments}`;
+
+    const result = await db.run(
+      `INSERT INTO transactions
+         (account_id, category_id, type, amount, description, date, installment_group_id, installment_number, total_installments)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        account_id,
+        category_id,
+        type,
+        Math.round(amount * 100) / 100,
+        installmentDescription,
+        installmentDate,
+        groupId,
+        i + 1,
+        total_installments,
+      ]
+    );
+    createdIds.push(result.lastInsertRowid);
+  }
+
+  const created = [];
+  for (const id of createdIds) {
+    created.push(await getTransaction(id));
+  }
+  return created;
+}
+
 async function updateTransaction(id, fields = {}) {
   const raw = await db.get("SELECT * FROM transactions WHERE id = ?", [id]);
   if (!raw) return null;
@@ -237,6 +311,7 @@ async function getSummary({ month, account_id } = {}) {
 module.exports = {
   listTransactions,
   createTransaction,
+  createInstallmentPurchase,
   updateTransaction,
   deleteTransaction,
   getSummary,
