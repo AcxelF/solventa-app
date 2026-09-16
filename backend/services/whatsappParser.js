@@ -72,10 +72,7 @@ Reglas:
 `;
 }
 
-async function parseMessageWithGemini(userText, categories, accounts) {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) return null;
-
+function buildTextPrompt(userText, categories, accounts) {
   const categoriesPrompt = categories
     .map((c) => `ID: ${c.id}, Nombre: "${c.name}", Tipo: "${c.type}"`)
     .join("\n");
@@ -84,7 +81,7 @@ async function parseMessageWithGemini(userText, categories, accounts) {
     .map((a) => `ID: ${a.id}, Nombre: "${a.name}"`)
     .join("\n");
 
-  const prompt = `
+  return `
 Eres un asistente financiero peruano que analiza mensajes de WhatsApp para registrar ingresos y gastos.
 Analiza el siguiente texto y devuelve EXCLUSIVAMENTE un objeto JSON válido (sin bloques de markdown ni texto extra).
 
@@ -106,6 +103,56 @@ Estructura JSON esperada:
 }
 ${buildTransactionRules("el texto")}- Si no hay un monto válido en el texto, devuelve JSON con "error": "No se encontró el monto".
 `;
+}
+
+function cleanAndParseJson(rawText) {
+  const cleaned = rawText.replace(/```json/g, "").replace(/```/g, "").trim();
+  const parsed = JSON.parse(cleaned);
+  if (parsed.error) return null;
+  return parsed;
+}
+
+async function parseMessageWithGroq(userText, categories, accounts) {
+  const apiKey = process.env.GROQ_API_KEY;
+  if (!apiKey) return null;
+
+  const prompt = buildTextPrompt(userText, categories, accounts);
+
+  try {
+    const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "llama-3.3-70b-versatile",
+        messages: [{ role: "user", content: prompt }],
+        temperature: 0,
+        response_format: { type: "json_object" },
+      }),
+    });
+
+    if (!res.ok) {
+      const errorBody = await res.text();
+      console.error(`[WhatsApp Parser Groq Error] HTTP ${res.status}:`, errorBody);
+      return null;
+    }
+
+    const data = await res.json();
+    const rawText = data?.choices?.[0]?.message?.content || "";
+    return cleanAndParseJson(rawText);
+  } catch (err) {
+    console.error("[WhatsApp Parser Groq Error]", err.stack || err);
+    return null;
+  }
+}
+
+async function parseMessageWithGemini(userText, categories, accounts) {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) return null;
+
+  const prompt = buildTextPrompt(userText, categories, accounts);
 
   try {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${apiKey}`;
@@ -366,7 +413,7 @@ function parseMessageRegex(userText, categories, accounts) {
 }
 
 async function resolveTransactionFromText(userText, categories, accounts) {
-  // Intentar con Gemini AI si está disponible (con fallback seguro)
+  // 1. Intentar con Gemini AI si está disponible
   let result = null;
   try {
     result = await parseMessageWithGemini(userText, categories, accounts);
@@ -374,9 +421,19 @@ async function resolveTransactionFromText(userText, categories, accounts) {
     console.error("[WhatsApp Parser Gemini Fallback]", err);
   }
 
-  // Fallback a Regex inteligente
+  // 2. Si Gemini falla (ej. tope diario de 20 peticiones del tier gratuito),
+  // intentar con Groq (14,400 peticiones/día gratis) antes de caer al regex.
   if (!result) {
-    console.log(`[WhatsApp Parser] Gemini no devolvió resultado, usando fallback de regex para: "${userText}"`);
+    try {
+      result = await parseMessageWithGroq(userText, categories, accounts);
+    } catch (err) {
+      console.error("[WhatsApp Parser Groq Fallback]", err);
+    }
+  }
+
+  // 3. Fallback final: Regex inteligente (siempre disponible, sin límite de uso)
+  if (!result) {
+    console.log(`[WhatsApp Parser] Gemini y Groq no devolvieron resultado, usando fallback de regex para: "${userText}"`);
     result = parseMessageRegex(userText, categories, accounts);
   }
 

@@ -12,7 +12,9 @@
     "jspdf": "^4.2.1",
     "lucide-react": "^0.469.0",
     "react": "^18.3.1",
+    "react-countup": "^6.5.3",
     "react-dom": "^18.3.1",
+    "react-loading-skeleton": "^3.5.0",
     "recharts": "^2.13.3"
   },
   "devDependencies": {

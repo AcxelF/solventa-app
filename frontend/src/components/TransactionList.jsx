@@ -1,8 +1,11 @@
 import { Pencil, Trash2 } from "lucide-react";
+import Skeleton, { SkeletonTheme } from "react-loading-skeleton";
 import { categoryIcon } from "../lib/categoryIcons.js";
 import { formatMoney } from "../utils/format.js";
 import IconBadge from "./ui/IconBadge.jsx";
 import EmptyState from "./ui/EmptyState.jsx";
+
+const SKELETON_ROWS = 4;
 
 export default function TransactionList({
   transactions,
@@ -12,7 +15,22 @@ export default function TransactionList({
   emptyMessage = "No hay movimientos este mes.",
 }) {
   if (loading) {
-    return <p className="text-sm text-text-muted">Cargando movimientos…</p>;
+    return (
+      <SkeletonTheme baseColor="rgb(var(--surface-2))" highlightColor="rgb(var(--border))">
+        <ul className="divide-y divide-border rounded-2xl border border-border bg-surface">
+          {Array.from({ length: SKELETON_ROWS }).map((_, i) => (
+            <li key={i} className="flex items-center gap-3 px-4 py-3">
+              <Skeleton circle width={36} height={36} />
+              <div className="min-w-0 flex-1">
+                <Skeleton width="40%" height={14} />
+                <Skeleton width="70%" height={12} style={{ marginTop: 6 }} />
+              </div>
+              <Skeleton width={64} height={16} />
+            </li>
+          ))}
+        </ul>
+      </SkeletonTheme>
+    );
   }
 
   if (!transactions.length) {
