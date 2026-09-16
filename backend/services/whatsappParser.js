@@ -5,28 +5,62 @@ const categoriesService = require("./categories");
  * Servicio para interpretar mensajes en lenguaje natural e identificarlos como transacciones.
  */
 
-const CATEGORY_GUIDE = `
+// Fuente única de verdad: se usa tanto para armar el prompt de Gemini como
+// para el fallback de regex, así ambos quedan siempre sincronizados.
+const CATEGORY_KEYWORDS = {
+  "Alimentación": ["almuerzo", "cena", "desayuno", "restaurante", "delivery", "mercado", "supermercado", "comida"],
+  "Transporte": ["taxi", "uber", "cabify", "pasaje", "combi", "gasolina", "peaje", "estacionamiento"],
+  "Vivienda": ["alquiler", "renta", "luz", "agua", "internet", "gas", "mantenimiento"],
+  "Entretenimiento": ["cine", "salida", "fiesta", "bar", "discoteca", "videojuego", "concierto"],
+  "Salud": ["farmacia", "doctor", "médico", "medico", "medicina", "consulta", "seguro", "dentista"],
+  "Educación": ["curso", "universidad", "instituto", "libros", "colegio", "matrícula", "matricula"],
+  "streaming": ["netflix", "spotify", "disney", "youtube premium", "suscripción", "suscripcion"],
+};
+
+const INCOME_CATEGORY_KEYWORDS = {
+  "Sueldo": ["sueldo", "salario"],
+  "Freelance": ["freelance", "independiente"],
+  "Regalo": ["regalo"],
+};
+
+const ACCOUNT_ALIASES = {
+  "CMR Credito": ["cmr", "c m r", "cmr credito", "cemerre"],
+  "Banco Falabella": ["falabella", "banco falabella"],
+  "Tarjeta de Alimentos": ["tarjeta de alimento", "tarjeta de alimentos", "vales"],
+  "Scotiabank": ["plin", "scotiabank"],
+  "YAPE": ["yape"],
+};
+
+function buildCategoryGuideText() {
+  const gastoLines = Object.entries(CATEGORY_KEYWORDS)
+    .map(([name, keywords]) => `- ${name}: ${keywords.join(", ")}.`)
+    .join("\n");
+  const ingresoLines = Object.entries(INCOME_CATEGORY_KEYWORDS)
+    .map(([name, keywords]) => `${name} (${keywords.join(", ")})`)
+    .join(", ");
+
+  return `
 Guía de qué categoría de gasto usar según el concepto (úsala como referencia, no es una lista cerrada):
-- Alimentación: almuerzo, cena, desayuno, restaurante, delivery, mercado, supermercado, comida.
-- Transporte: taxi, uber, cabify, pasaje, combi, gasolina, peaje, estacionamiento.
-- Vivienda: alquiler, renta, luz, agua, internet, gas, mantenimiento.
-- Entretenimiento: cine, salida, fiesta, bar, discoteca, videojuego, concierto.
-- Salud: farmacia, doctor, médico, medicina, consulta, seguro, dentista.
-- Educación: curso, universidad, instituto, libros, colegio, matrícula.
-- streaming: suscripciones de Netflix, Spotify, Disney+, YouTube Premium, etc.
+${gastoLines}
 - Otros: cualquier gasto que no encaje claramente en las anteriores.
 
-Para ingresos usa: Sueldo (pago de trabajo formal), Freelance (trabajo independiente), Regalo (dinero recibido de otra persona), Otros (cualquier otro ingreso).
+Para ingresos usa: ${ingresoLines}, Otros (cualquier otro ingreso).
 `;
+}
 
-const ACCOUNT_ALIAS_GUIDE = `
+function buildAccountAliasGuideText() {
+  const lines = Object.entries(ACCOUNT_ALIASES)
+    .map(([name, aliases]) => `- ${aliases.map((a) => `"${a}"`).join(", ")} -> cuenta "${name}".`)
+    .join("\n");
+
+  return `
 Alias de cuentas (úsalos siempre que se mencione alguna de estas formas, aunque no coincida textualmente con el nombre de la cuenta):
-- "CMR", "C M R", "cmr credito", "cemerre" -> cuenta "CMR Credito".
-- "Falabella", "banco falabella" -> cuenta "Banco Falabella".
-- "tarjeta de alimento", "tarjeta de alimentos", "vales" -> cuenta "Tarjeta de Alimentos".
-- "Plin" -> cuenta "Scotiabank" (el Plin de este usuario está vinculado a esa cuenta).
-- "Yape" -> cuenta "YAPE".
+${lines}
 `;
+}
+
+const CATEGORY_GUIDE = buildCategoryGuideText();
+const ACCOUNT_ALIAS_GUIDE = buildAccountAliasGuideText();
 
 function buildTransactionRules(unitLabel) {
   return `
@@ -270,23 +304,53 @@ function parseMessageRegex(userText, categories, accounts) {
   const amount = parseFloat(amountMatch[1].replace(",", "."));
   if (isNaN(amount) || amount <= 0) return null;
 
-  // 3. Matchear Cuenta
+  // 3. Matchear Cuenta (primero por alias conocidos, luego por nombre exacto)
   let accountId = accounts[0]?.id || 1;
-  for (const acc of accounts) {
-    if (textLower.includes(acc.name.toLowerCase())) {
-      accountId = acc.id;
-      break;
+  let accountMatched = false;
+
+  for (const [accountName, aliases] of Object.entries(ACCOUNT_ALIASES)) {
+    if (aliases.some((alias) => textLower.includes(alias))) {
+      const acc = accounts.find((a) => a.name.toLowerCase() === accountName.toLowerCase());
+      if (acc) {
+        accountId = acc.id;
+        accountMatched = true;
+        break;
+      }
     }
   }
 
-  // 4. Matchear Categoría
+  if (!accountMatched) {
+    for (const acc of accounts) {
+      if (textLower.includes(acc.name.toLowerCase())) {
+        accountId = acc.id;
+        break;
+      }
+    }
+  }
+
+  // 4. Matchear Categoría (primero por keywords conocidos, luego por nombre exacto)
   const validCategories = categories.filter((c) => c.type === type);
   let categoryId = validCategories[0]?.id || (type === "gasto" ? 1 : 2);
+  let categoryMatched = false;
 
-  for (const cat of validCategories) {
-    if (textLower.includes(cat.name.toLowerCase())) {
-      categoryId = cat.id;
-      break;
+  const keywordMap = type === "gasto" ? CATEGORY_KEYWORDS : INCOME_CATEGORY_KEYWORDS;
+  for (const [categoryName, keywords] of Object.entries(keywordMap)) {
+    if (keywords.some((kw) => textLower.includes(kw))) {
+      const cat = validCategories.find((c) => c.name.toLowerCase() === categoryName.toLowerCase());
+      if (cat) {
+        categoryId = cat.id;
+        categoryMatched = true;
+        break;
+      }
+    }
+  }
+
+  if (!categoryMatched) {
+    for (const cat of validCategories) {
+      if (textLower.includes(cat.name.toLowerCase())) {
+        categoryId = cat.id;
+        break;
+      }
     }
   }
 
