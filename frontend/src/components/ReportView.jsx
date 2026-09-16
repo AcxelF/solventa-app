@@ -1,12 +1,35 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Download, FileText, CheckCircle2, Sparkles, PieChart, Wallet, CreditCard as CardIcon } from "lucide-react";
+import { Download, FileText } from "lucide-react";
 import { fetchSummary, fetchTransactions, fetchDashboardWidgets } from "../api.js";
-import { currentMonthISO, monthLabel } from "../lib/dates.js";
+import { currentMonthISO, monthLabel, todayISO, formatDateShort } from "../lib/dates.js";
 import { formatMoney } from "../utils/format.js";
 import MonthNavigator from "./MonthNavigator.jsx";
 import Button from "./ui/Button.jsx";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
+
+function SectionHeading({ number, children }) {
+  return (
+    <h3 className="border-b border-slate-300 pb-1.5 text-[11px] font-bold uppercase tracking-[0.08em] text-slate-500">
+      {number}. {children}
+    </h3>
+  );
+}
+
+function SummaryRow({ label, value, strong, negative }) {
+  return (
+    <div className="flex items-baseline justify-between border-b border-dotted border-slate-300 py-2 text-sm">
+      <span className="text-slate-600">{label}</span>
+      <span
+        className={`font-mono ${strong ? "text-base font-bold" : "font-semibold"} ${
+          negative ? "text-red-700" : "text-slate-900"
+        }`}
+      >
+        {value}
+      </span>
+    </div>
+  );
+}
 
 export default function ReportView() {
   const [month, setMonth] = useState(currentMonthISO());
@@ -46,7 +69,7 @@ export default function ReportView() {
       const canvas = await html2canvas(reportRef.current, {
         scale: 2,
         useCORS: true,
-        backgroundColor: "#0f172a", // Mantener contraste o color de fondo
+        backgroundColor: "#ffffff",
       });
       const imgData = canvas.toDataURL("image/png");
       const pdf = new jsPDF("p", "mm", "a4");
@@ -75,20 +98,24 @@ export default function ReportView() {
   };
 
   const ahorroNeto = summary ? summary.totalIngresos - summary.totalGastos : 0;
-  const pctAhorro = summary && summary.totalIngresos > 0 
+  const pctAhorro = summary && summary.totalIngresos > 0
     ? Math.max(0, Math.round((ahorroNeto / summary.totalIngresos) * 100))
+    : 0;
+  const topCategory = summary?.byCategory?.[0];
+  const topCategoryPct = summary && summary.totalGastos > 0 && topCategory
+    ? Math.round((topCategory.total / summary.totalGastos) * 100)
     : 0;
 
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-border bg-surface p-6 shadow-soft">
         <div>
-          <h2 className="text-xl font-bold text-text flex items-center gap-2">
+          <h2 className="flex items-center gap-2 text-xl font-bold text-text">
             <FileText className="text-emerald-500" size={24} />
             Informe Financiero Mensual
           </h2>
           <p className="mt-1 text-xs text-text-muted">
-            Genera y descarga un reporte ejecutivo detallado con saldos, categorías e inteligencia financiera.
+            Genera y descarga un reporte formal con saldos, categorías y análisis del mes.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
@@ -110,155 +137,137 @@ export default function ReportView() {
       {!loading && summary && (
         <div
           ref={reportRef}
-          className="rounded-2xl border border-border bg-slate-900 p-8 text-slate-100 shadow-2xl space-y-8 max-w-4xl mx-auto"
+          className="mx-auto max-w-3xl space-y-7 border border-slate-300 bg-white p-10 text-slate-900 shadow-2xl"
         >
-          {/* Header del Reporte */}
-          <div className="flex flex-wrap items-center justify-between border-b border-slate-800 pb-6 gap-4">
+          {/* Membrete */}
+          <div className="flex items-start justify-between border-b-2 border-slate-900 pb-5">
             <div>
               <div className="flex items-center gap-2">
-                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500 font-bold text-slate-950">
+                <span className="flex h-8 w-8 items-center justify-center rounded bg-slate-900 font-bold text-white">
                   S/
                 </span>
-                <span className="text-2xl font-bold tracking-tight text-white">Solventa</span>
+                <span className="text-2xl font-bold tracking-tight text-slate-900">Solventa</span>
               </div>
-              <p className="mt-1 text-xs text-slate-400">Plataforma de Finanzas Personales & WhatsApp Bot</p>
+              <p className="mt-1 text-[11px] text-slate-500">
+                Plataforma de finanzas personales &amp; WhatsApp Bot
+              </p>
             </div>
             <div className="text-right">
-              <span className="rounded-full bg-emerald-500/10 border border-emerald-500/20 px-3 py-1 text-xs font-semibold text-emerald-400">
-                REPORTE OFICIAL
-              </span>
-              <p className="mt-2 text-sm font-medium text-slate-300 capitalize">
+              <p className="text-xs font-bold uppercase tracking-[0.1em] text-slate-500">
+                Informe financiero mensual
+              </p>
+              <p className="mt-1 text-lg font-bold capitalize text-slate-900">
                 {monthLabel(month)}
+              </p>
+              <p className="mt-1 text-[10px] text-slate-400">
+                Generado el {formatDateShort(todayISO())}
               </p>
             </div>
           </div>
 
-          {/* 1. Resumen Ejecutivo */}
-          <div>
-            <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-400 mb-3 flex items-center gap-2">
-              <Wallet size={16} className="text-emerald-400" />
-              1. Resumen Ejecutivo de Saldos
-            </h3>
-            <div className="grid gap-4 sm:grid-cols-4">
-              <div className="rounded-xl border border-slate-800 bg-slate-800/50 p-4">
-                <p className="text-[11px] font-medium uppercase text-slate-400">Saldo Líquido</p>
-                <p className="mt-1 font-mono text-xl font-bold text-emerald-400">
-                  {formatMoney(summary.totalBalance)}
-                </p>
-              </div>
-              <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-4">
-                <p className="text-[11px] font-medium uppercase text-amber-400">Deuda Tarjetas</p>
-                <p className="mt-1 font-mono text-xl font-bold text-amber-400">
-                  {formatMoney(summary.creditDebt || 0)}
-                </p>
-              </div>
-              <div className="rounded-xl border border-slate-800 bg-slate-800/50 p-4">
-                <p className="text-[11px] font-medium uppercase text-slate-400">Ingresos Totales</p>
-                <p className="mt-1 font-mono text-xl font-bold text-emerald-400">
-                  {formatMoney(summary.totalIngresos)}
-                </p>
-              </div>
-              <div className="rounded-xl border border-slate-800 bg-slate-800/50 p-4">
-                <p className="text-[11px] font-medium uppercase text-slate-400">Gastos Totales</p>
-                <p className="mt-1 font-mono text-xl font-bold text-rose-400">
-                  {formatMoney(summary.totalGastos)}
-                </p>
-              </div>
-            </div>
-
-            <div className="mt-3 flex items-center justify-between rounded-xl bg-slate-800/30 px-4 py-3 border border-slate-800">
-              <span className="text-xs text-slate-300">Capacidad de Ahorro del Mes:</span>
-              <span className="font-mono text-sm font-bold text-emerald-400">
-                {formatMoney(ahorroNeto)} ({pctAhorro}% de los ingresos)
-              </span>
+          {/* 1. Resumen ejecutivo */}
+          <div className="space-y-1">
+            <SectionHeading number="1">Resumen Ejecutivo de Saldos</SectionHeading>
+            <div>
+              <SummaryRow label="Saldo líquido disponible" value={formatMoney(summary.totalBalance)} />
+              <SummaryRow
+                label="Deuda en tarjetas de crédito"
+                value={formatMoney(summary.creditDebt || 0)}
+                negative={(summary.creditDebt || 0) > 0}
+              />
+              <SummaryRow label="Ingresos totales del mes" value={formatMoney(summary.totalIngresos)} />
+              <SummaryRow label="Gastos totales del mes" value={formatMoney(summary.totalGastos)} negative />
+              <SummaryRow
+                label={`Capacidad de ahorro del mes (${pctAhorro}% de los ingresos)`}
+                value={formatMoney(ahorroNeto)}
+                negative={ahorroNeto < 0}
+                strong
+              />
             </div>
           </div>
 
-          {/* 2. Desglose de Gastos por Categoría */}
-          <div>
-            <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-400 mb-3 flex items-center gap-2">
-              <PieChart size={16} className="text-emerald-400" />
-              2. Desglose de Gastos por Categoría
-            </h3>
+          {/* 2. Desglose por categoría */}
+          <div className="space-y-2">
+            <SectionHeading number="2">Desglose de Gastos por Categoría</SectionHeading>
             {summary.byCategory.length === 0 ? (
-              <p className="text-xs text-slate-500">Sin gastos registrados en este período.</p>
+              <p className="text-xs text-slate-400">Sin gastos registrados en este período.</p>
             ) : (
-              <div className="space-y-2">
-                {summary.byCategory.slice(0, 6).map((cat) => {
-                  const pct = summary.totalGastos > 0 
-                    ? Math.round((cat.total / summary.totalGastos) * 100) 
-                    : 0;
-                  return (
-                    <div key={cat.category_id} className="space-y-1">
-                      <div className="flex justify-between text-xs font-medium">
-                        <span className="text-slate-300">{cat.category}</span>
-                        <span className="font-mono text-slate-200">
-                          {formatMoney(cat.total)} ({pct}%)
-                        </span>
-                      </div>
-                      <div className="h-2 w-full overflow-hidden rounded-full bg-slate-800">
-                        <div
-                          className="h-full rounded-full bg-emerald-500"
-                          style={{ width: `${Math.min(100, pct)}%` }}
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+              <table className="w-full border-collapse text-sm">
+                <thead>
+                  <tr className="text-left text-[10px] uppercase tracking-wider text-slate-500">
+                    <th className="border-b border-slate-300 py-1.5 font-semibold">Categoría</th>
+                    <th className="border-b border-slate-300 py-1.5 text-right font-semibold">Monto</th>
+                    <th className="border-b border-slate-300 py-1.5 text-right font-semibold">% del gasto</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {summary.byCategory.slice(0, 8).map((cat, i) => {
+                    const pct = summary.totalGastos > 0
+                      ? Math.round((cat.total / summary.totalGastos) * 100)
+                      : 0;
+                    return (
+                      <tr key={cat.category_id} className={i % 2 === 1 ? "bg-slate-50" : ""}>
+                        <td className="border-b border-slate-200 py-1.5 pl-1 text-slate-700">{cat.category}</td>
+                        <td className="border-b border-slate-200 py-1.5 text-right font-mono text-slate-900">
+                          {formatMoney(cat.total)}
+                        </td>
+                        <td className="border-b border-slate-200 py-1.5 pr-1 text-right font-mono text-slate-500">
+                          {pct}%
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             )}
           </div>
 
-          {/* 3. Métodos de Pago */}
-          <div>
-            <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-400 mb-3 flex items-center gap-2">
-              <CardIcon size={16} className="text-emerald-400" />
-              3. Análisis por Método de Pago
-            </h3>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="rounded-xl border border-slate-800 bg-slate-800/40 p-4">
-                <p className="text-xs font-medium text-slate-300">Pagado con Dinero Líquido</p>
-                <p className="mt-1 font-mono text-lg font-bold text-slate-100">
-                  {formatMoney(summary.gastosLiquidos || 0)}
-                </p>
-                <p className="mt-1 text-[11px] text-slate-400">Efectivo, Débito, Yape, Plin</p>
-              </div>
-              <div className="rounded-xl border border-slate-800 bg-slate-800/40 p-4">
-                <p className="text-xs font-medium text-slate-300">Cargado a Tarjeta de Crédito</p>
-                <p className="mt-1 font-mono text-lg font-bold text-amber-400">
-                  {formatMoney(summary.gastosCredito || 0)}
-                </p>
-                <p className="mt-1 text-[11px] text-slate-400">Líneas de crédito bancarias</p>
-              </div>
-            </div>
+          {/* 3. Métodos de pago */}
+          <div className="space-y-2">
+            <SectionHeading number="3">Análisis por Método de Pago</SectionHeading>
+            <table className="w-full border-collapse text-sm">
+              <tbody>
+                <tr>
+                  <td className="border-b border-slate-200 py-2 text-slate-700">
+                    Dinero líquido
+                    <span className="ml-1 text-[10px] text-slate-400">(Efectivo, débito, Yape, Plin)</span>
+                  </td>
+                  <td className="border-b border-slate-200 py-2 text-right font-mono font-semibold text-slate-900">
+                    {formatMoney(summary.gastosLiquidos || 0)}
+                  </td>
+                </tr>
+                <tr>
+                  <td className="py-2 text-slate-700">
+                    Tarjeta de crédito
+                    <span className="ml-1 text-[10px] text-slate-400">(Líneas de crédito bancarias)</span>
+                  </td>
+                  <td className="py-2 text-right font-mono font-semibold text-slate-900">
+                    {formatMoney(summary.gastosCredito || 0)}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
 
-          {/* 4. Insights Inteligencia Financiera */}
-          <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-4 space-y-2">
-            <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
-              <Sparkles size={14} />
-              Insights de Inteligencia Financiera
-            </h4>
-            <ul className="text-xs text-slate-300 space-y-1">
-              <li className="flex items-center gap-2">
-                <CheckCircle2 size={12} className="text-emerald-400 shrink-0" />
-                <span>
-                  Tu mayor categoría de gasto fue <strong>{summary.byCategory[0]?.category || "General"}</strong> representando el {summary.totalGastos > 0 ? Math.round(((summary.byCategory[0]?.total || 0) / summary.totalGastos) * 100) : 0}% de tus salidas.
-                </span>
+          {/* 4. Observaciones */}
+          <div className="space-y-2">
+            <SectionHeading number="4">Observaciones</SectionHeading>
+            <ul className="space-y-1.5 border-l-2 border-emerald-700 pl-3 text-xs text-slate-600">
+              <li>
+                Tu mayor categoría de gasto fue <strong className="text-slate-900">{topCategory?.category || "General"}</strong>,
+                {" "}representando el <strong className="text-slate-900">{topCategoryPct}%</strong> de tus salidas del mes.
               </li>
-              <li className="flex items-center gap-2">
-                <CheckCircle2 size={12} className="text-emerald-400 shrink-0" />
-                <span>
-                  Lograste conservar un <strong>{pctAhorro}%</strong> de tus ingresos mensuales.
-                </span>
+              <li>
+                Lograste conservar un <strong className="text-slate-900">{pctAhorro}%</strong> de tus ingresos mensuales
+                {ahorroNeto < 0 ? " (mes con saldo negativo)" : ""}.
               </li>
             </ul>
           </div>
 
-          {/* Footer del Reporte */}
-          <div className="border-t border-slate-800 pt-4 flex justify-between items-center text-[10px] text-slate-500">
-            <span>Generado automáticamente por Solventa App & WhatsApp Bot</span>
-            <span>https://solventa-app.vercel.app</span>
+          {/* Pie del documento */}
+          <div className="flex items-center justify-between border-t border-slate-300 pt-4 text-[9px] text-slate-400">
+            <span>Documento generado automáticamente por Solventa App &amp; WhatsApp Bot</span>
+            <span>solventa-app.vercel.app</span>
           </div>
         </div>
       )}
