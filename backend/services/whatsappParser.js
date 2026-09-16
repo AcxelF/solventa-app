@@ -19,13 +19,22 @@ Guía de qué categoría de gasto usar según el concepto (úsala como referenci
 Para ingresos usa: Sueldo (pago de trabajo formal), Freelance (trabajo independiente), Regalo (dinero recibido de otra persona), Otros (cualquier otro ingreso).
 `;
 
+const ACCOUNT_ALIAS_GUIDE = `
+Alias de cuentas (úsalos siempre que se mencione alguna de estas formas, aunque no coincida textualmente con el nombre de la cuenta):
+- "CMR", "C M R", "cmr credito" -> cuenta "CMR Credito".
+- "Falabella", "banco falabella" -> cuenta "Banco Falabella".
+- "tarjeta de alimento", "tarjeta de alimentos", "vales" -> cuenta "Tarjeta de Alimentos".
+- "Plin" -> cuenta "Scotiabank" (el Plin de este usuario está vinculado a esa cuenta).
+- "Yape" -> cuenta "YAPE".
+`;
+
 function buildTransactionRules(unitLabel) {
   return `
 Reglas:
 - Si ${unitLabel} indica pagar, gastar, comprar, costo o salida de dinero -> "type": "gasto".
 - Si ${unitLabel} indica recibir, cobro, ingreso, abono, sueldo, transferencia a favor -> "type": "ingreso".
-- Elije siempre la category_id que mejor coincida con el concepto, usando la guía de arriba. Debe ser de tipo coherente ("gasto" o "ingreso"). Si ninguna encaja bien, usa la categoría "Otros" del tipo correspondiente — nunca dejes de responder por no encontrar una categoría exacta.
-- Elije la account_id solo si ${unitLabel} menciona claramente el nombre de una cuenta de la lista (ej. "con Yape", "en mi Scotiabank"). Si no menciona ninguna o no coincide con la lista, usa la primera cuenta disponible.
+- Elije siempre la category_id que mejor coincida con el concepto, usando la guía de categorías de arriba. Debe ser de tipo coherente ("gasto" o "ingreso"). Si ninguna encaja bien, usa la categoría "Otros" del tipo correspondiente — nunca dejes de responder por no encontrar una categoría exacta.
+- Elije la account_id solo si ${unitLabel} menciona claramente el nombre o alias de una cuenta de la lista (usa la guía de alias de arriba). Si no menciona ninguna o no coincide con nada, usa la primera cuenta disponible.
 `;
 }
 
@@ -52,7 +61,7 @@ ${categoriesPrompt}
 ${CATEGORY_GUIDE}
 Cuentas disponibles (usa SIEMPRE uno de estos IDs, nunca inventes uno):
 ${accountsPrompt}
-
+${ACCOUNT_ALIAS_GUIDE}
 Estructura JSON esperada:
 {
   "type": "gasto" o "ingreso",
@@ -121,7 +130,7 @@ ${categoriesPrompt}
 ${CATEGORY_GUIDE}
 Cuentas disponibles (usa SIEMPRE uno de estos IDs, nunca inventes uno):
 ${accountsPrompt}
-
+${ACCOUNT_ALIAS_GUIDE}
 Estructura JSON esperada:
 {
   "type": "gasto" o "ingreso",
