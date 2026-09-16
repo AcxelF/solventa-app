@@ -87,6 +87,18 @@ Analiza el siguiente texto y devuelve EXCLUSIVAMENTE un objeto JSON válido (sin
 
 Texto del usuario: "${userText}"
 
+IMPORTANTE — este texto puede venir de OCR (lectura automática de una foto/captura de Yape, Plin,
+transferencia bancaria o boleta), en cuyo caso puede tener basura: horas ("10:20"), códigos de
+seguridad, números de operación, números de celular parciales, o íconos mal leídos como números
+sueltos (ej. un "61" que no tiene nada que ver con el monto real). En ese caso:
+- El monto real es el número que aparece INMEDIATAMENTE junto a un símbolo de moneda: "S/", "SI",
+  "S1" (el OCR a veces lee mal "S/" como "SI" o "S1"), o la palabra "soles". Ignora cualquier otro
+  número suelto que no tenga ese símbolo al lado, aunque aparezca antes en el texto.
+- El nombre de la persona o negocio para el campo "description" es la palabra o frase corta que
+  aparece INMEDIATAMENTE DESPUÉS del monto (ej. después de "¡Yapeaste! SI 7" viene "Luis Alm*" —
+  ese es el destinatario). Usa "Para: <nombre>" si es un gasto, o "De: <nombre>" si es un ingreso.
+  No uses descripciones genéricas como "Pago Yape" si el nombre real está disponible en el texto.
+
 Categorías disponibles (usa SIEMPRE uno de estos IDs, nunca inventes uno):
 ${categoriesPrompt}
 ${CATEGORY_GUIDE}
