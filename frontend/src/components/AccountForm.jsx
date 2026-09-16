@@ -15,6 +15,9 @@ export default function AccountForm({ initial, onSubmit, onCancel }) {
     initial?.color ?? ACCOUNT_TYPES[0].color
   );
   const [iconUrl, setIconUrl] = useState(initial?.icon_url ?? "");
+  const [initialBalance, setInitialBalance] = useState(
+    initial?.initial_balance != null ? String(initial.initial_balance) : "0"
+  );
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -36,6 +39,12 @@ export default function AccountForm({ initial, onSubmit, onCancel }) {
       return;
     }
 
+    const parsedInitialBalance = parseFloat(initialBalance.replace(",", "."));
+    if (initialBalance.trim() !== "" && isNaN(parsedInitialBalance)) {
+      setError("El saldo inicial debe ser un número.");
+      return;
+    }
+
     setSaving(true);
     try {
       await onSubmit({
@@ -43,6 +52,7 @@ export default function AccountForm({ initial, onSubmit, onCancel }) {
         type,
         color,
         icon_url: type === "Otro" && iconUrl.trim() ? iconUrl.trim() : undefined,
+        initial_balance: isNaN(parsedInitialBalance) ? 0 : parsedInitialBalance,
       });
     } catch (err) {
       setError(err.message);
@@ -90,6 +100,19 @@ export default function AccountForm({ initial, onSubmit, onCancel }) {
           />
         </Field>
       )}
+
+      <Field
+        label={type === "Tarjeta de crédito" ? "Deuda inicial" : "Saldo inicial"}
+        hint="El monto que ya tienes (o debes) en esta cuenta hoy, sin necesidad de crear un movimiento. El saldo mostrado será este número más tus ingresos/gastos futuros."
+      >
+        <TextInput
+          type="text"
+          inputMode="decimal"
+          value={initialBalance}
+          onChange={(e) => setInitialBalance(e.target.value)}
+          placeholder="0.00"
+        />
+      </Field>
 
       <Field label="Color">
         <div className="mt-1 flex flex-wrap items-center gap-2">

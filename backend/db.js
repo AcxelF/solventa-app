@@ -57,6 +57,7 @@ const SCHEMA = `
     credit_limit REAL,
     cut_day INTEGER,
     payment_day INTEGER,
+    initial_balance REAL NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
 
@@ -132,6 +133,7 @@ async function migrate() {
     ["credit_limit", "REAL"],
     ["cut_day", "INTEGER"],
     ["payment_day", "INTEGER"],
+    ["initial_balance", "REAL NOT NULL DEFAULT 0"],
   ];
 
   for (const [name, type] of additions) {

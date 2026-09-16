@@ -191,11 +191,23 @@ async function getSummary({ month, account_id } = {}) {
     (a, b) => b.total - a.total
   );
 
+  const initialLiquidRow = await db.get(
+    `SELECT COALESCE(SUM(initial_balance), 0) AS total FROM accounts
+     WHERE type != 'Tarjeta de crédito' ${account_id ? "AND id = ?" : ""}`,
+    account_id ? [account_id] : []
+  );
+
   const totalBalanceRow = await db.get(
     `SELECT COALESCE(SUM(CASE WHEN t.type = 'ingreso' THEN t.amount ELSE -t.amount END), 0) AS liquidBalance
      FROM transactions t
      JOIN accounts a ON a.id = t.account_id
      WHERE a.type != 'Tarjeta de crédito' ${account_id ? "AND t.account_id = ?" : ""}`,
+    account_id ? [account_id] : []
+  );
+
+  const initialCreditRow = await db.get(
+    `SELECT COALESCE(SUM(initial_balance), 0) AS total FROM accounts
+     WHERE type = 'Tarjeta de crédito' ${account_id ? "AND id = ?" : ""}`,
     account_id ? [account_id] : []
   );
 
@@ -207,9 +219,12 @@ async function getSummary({ month, account_id } = {}) {
     account_id ? [account_id] : []
   );
 
+  const liquidBalance = (totalBalanceRow ? totalBalanceRow.liquidBalance : 0) + initialLiquidRow.total;
+  const creditDebt = (creditDebtRow ? creditDebtRow.creditDebt : 0) + initialCreditRow.total;
+
   return {
-    totalBalance: totalBalanceRow ? totalBalanceRow.liquidBalance : 0,
-    creditDebt: creditDebtRow ? Math.max(0, creditDebtRow.creditDebt) : 0,
+    totalBalance: liquidBalance,
+    creditDebt: Math.max(0, creditDebt),
     totalIngresos,
     totalGastos,
     gastosLiquidos,
