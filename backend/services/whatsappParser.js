@@ -86,7 +86,11 @@ ${buildTransactionRules("el texto")}- Si no hay un monto válido en el texto, de
       }),
     });
 
-    if (!res.ok) return null;
+    if (!res.ok) {
+      const errorBody = await res.text();
+      console.error(`[WhatsApp Parser Gemini Error] HTTP ${res.status}:`, errorBody);
+      return null;
+    }
     const data = await res.json();
     let rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
 
@@ -94,10 +98,13 @@ ${buildTransactionRules("el texto")}- Si no hay un monto válido en el texto, de
     rawText = rawText.replace(/```json/g, "").replace(/```/g, "").trim();
 
     const parsed = JSON.parse(rawText);
-    if (parsed.error) return null;
+    if (parsed.error) {
+      console.log(`[WhatsApp Parser Gemini] Devolvió error de negocio: ${parsed.error}`);
+      return null;
+    }
     return parsed;
   } catch (err) {
-    console.error("[WhatsApp Parser Gemini Error]", err);
+    console.error("[WhatsApp Parser Gemini Error]", err.stack || err);
     return null;
   }
 }
@@ -303,6 +310,7 @@ async function resolveTransactionFromText(userText, categories, accounts) {
 
   // Fallback a Regex inteligente
   if (!result) {
+    console.log(`[WhatsApp Parser] Gemini no devolvió resultado, usando fallback de regex para: "${userText}"`);
     result = parseMessageRegex(userText, categories, accounts);
   }
 
