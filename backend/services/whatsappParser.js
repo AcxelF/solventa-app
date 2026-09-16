@@ -343,8 +343,16 @@ function parseMessageRegex(userText, categories, accounts) {
   }
 
   // 2. Extraer Monto
-  // Busca patrones como "S/ 50", "50.50", "20 soles", "100"
-  const amountMatch = textLower.match(/(?:s\/\s*|\$\s*|soles\s*)?(\d+(?:[\.,]\d{1,2})?)/);
+  // Prioridad 1: montos con símbolo de moneda explícito (incluye "SI"/"S1", que
+  // es como el OCR suele leer mal el "S/" en capturas de Yape/Plin/boletas).
+  // Prioridad 2 (fallback): cualquier número con formato de monto, pero
+  // evitando falsos positivos obvios como horas ("1:18") o fechas.
+  let amountMatch = textLower.match(/(?:s\/|soles|s1|\bsi\b)\s*[:\-]?\s*(\d+(?:[.,]\d{1,2})?)/);
+
+  if (!amountMatch) {
+    amountMatch = textLower.match(/(?:^|\s)(\d+(?:[.,]\d{1,2})?)(?!\s*:\d)/);
+  }
+
   if (!amountMatch) return null;
 
   const amount = parseFloat(amountMatch[1].replace(",", "."));
@@ -403,12 +411,16 @@ function parseMessageRegex(userText, categories, accounts) {
     }
   }
 
+  // El texto crudo del OCR puede venir con muchas líneas (interfaz de la app,
+  // botones, avisos); usamos solo una versión corta y legible como detalle.
+  const cleanDescription = userText.replace(/\s+/g, " ").trim().slice(0, 80);
+
   return {
     type,
     amount,
     category_id: categoryId,
     account_id: accountId,
-    description: userText.trim(),
+    description: cleanDescription,
   };
 }
 
