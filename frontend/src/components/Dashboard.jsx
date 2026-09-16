@@ -9,7 +9,7 @@ import {
   deleteTransaction,
 } from "../api.js";
 import { currentMonthISO } from "../lib/dates.js";
-import AnimatedMoney from "./ui/AnimatedMoney.jsx";
+import { formatMoney } from "../utils/format.js";
 import MonthNavigator from "./MonthNavigator.jsx";
 import SummaryCards from "./SummaryCards.jsx";
 import CategoryDonut from "./CategoryDonut.jsx";
@@ -131,7 +131,7 @@ export default function Dashboard({
                     Saldo Líquido Disponible
                   </p>
                   <p className="mt-1 font-mono text-3xl sm:text-4xl font-semibold text-text">
-                    <AnimatedMoney value={summary.totalBalance} />
+                    {formatMoney(summary.totalBalance)}
                   </p>
                 </div>
                 <div className="rounded-xl bg-emerald-500/10 p-3 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
@@ -151,7 +151,7 @@ export default function Dashboard({
                     Deuda en Tarjetas
                   </p>
                   <p className="mt-1 font-mono text-3xl sm:text-4xl font-semibold text-amber-600 dark:text-amber-400">
-                    <AnimatedMoney value={summary.creditDebt} />
+                    {formatMoney(summary.creditDebt || 0)}
                   </p>
                 </div>
                 <div className="rounded-xl bg-amber-500/10 p-3 text-amber-600 dark:text-amber-400 border border-amber-500/20">
