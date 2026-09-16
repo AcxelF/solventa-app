@@ -332,6 +332,32 @@ function containsPhrase(text, phrase) {
   return regex.test(text);
 }
 
+// Después de encontrar el monto en un texto de OCR (captura de Yape/Plin/boleta),
+// el nombre de la persona o negocio suele aparecer en la línea siguiente.
+// Esto filtra etiquetas típicas de la interfaz que no son nombres reales.
+const OCR_NOISE_LINES = [
+  "compartir", "código de seguridad", "codigo de seguridad", "datos de la transacción",
+  "datos de la transaccion", "nro. de celular", "nro de celular", "destino",
+  "nro. de operación", "nro de operacion", "más en", "mas en", "nuevo",
+  "aprovecha", "crédito", "credito", "preaprobado", "ir a créditos", "ir a creditos",
+  "yape", "plin", "yapeaste", "recibiste",
+];
+
+function extractLikelyNameAfter(originalText, fromIndex) {
+  const rest = originalText.slice(fromIndex);
+  const lines = rest.split(/\r?\n|\s{2,}/).map((l) => l.trim()).filter(Boolean);
+
+  for (const line of lines.slice(0, 4)) {
+    const lower = line.toLowerCase();
+    if (OCR_NOISE_LINES.some((noise) => lower.includes(noise))) continue;
+    if (/^\d+([.,]\d+)?$/.test(line)) continue;
+    if (/^[a-záéíóúñ][a-záéíóúñ*.\s]{2,39}$/i.test(line)) {
+      return line;
+    }
+  }
+  return null;
+}
+
 function parseMessageRegex(userText, categories, accounts) {
   const textLower = userText.toLowerCase();
 
@@ -348,6 +374,7 @@ function parseMessageRegex(userText, categories, accounts) {
   // Prioridad 2 (fallback): cualquier número con formato de monto, pero
   // evitando falsos positivos obvios como horas ("1:18") o fechas.
   let amountMatch = textLower.match(/(?:s\/|soles|s1|\bsi\b)\s*[:\-]?\s*(\d+(?:[.,]\d{1,2})?)/);
+  let usedCurrencyPattern = Boolean(amountMatch);
 
   if (!amountMatch) {
     amountMatch = textLower.match(/(?:^|\s)(\d+(?:[.,]\d{1,2})?)(?!\s*:\d)/);
@@ -412,8 +439,17 @@ function parseMessageRegex(userText, categories, accounts) {
   }
 
   // El texto crudo del OCR puede venir con muchas líneas (interfaz de la app,
-  // botones, avisos); usamos solo una versión corta y legible como detalle.
-  const cleanDescription = userText.replace(/\s+/g, " ").trim().slice(0, 80);
+  // botones, avisos). Si el monto se detectó con símbolo de moneda (típico de
+  // capturas de Yape/Plin/boletas), intentamos sacar el nombre de la persona
+  // o negocio que suele aparecer justo después ("Para: Paulino Cur*").
+  let cleanDescription = userText.replace(/\s+/g, " ").trim().slice(0, 80);
+
+  if (usedCurrencyPattern) {
+    const name = extractLikelyNameAfter(userText, amountMatch.index + amountMatch[0].length);
+    if (name) {
+      cleanDescription = type === "ingreso" ? `De: ${name}` : `Para: ${name}`;
+    }
+  }
 
   return {
     type,
