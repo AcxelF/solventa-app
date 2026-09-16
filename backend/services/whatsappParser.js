@@ -498,7 +498,103 @@ async function parseTransactionFromAudio(audioBuffer, mimeType) {
   };
 }
 
+async function describeTransactionImage(imageBuffer, mimeType) {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) return null;
+
+  const prompt = `
+Eres un asistente financiero peruano. Esta imagen es una captura de pantalla de una app de pagos
+(Yape, Plin, transferencia bancaria, Falabella, etc.) o una foto de una boleta/recibo de compra en papel.
+
+Léela con cuidado y describe la transacción en UNA SOLA FRASE en español, en primera persona, con este formato:
+"[Pagué/Recibí] [monto exacto] soles [a quién / en qué / dónde] [con qué medio de pago si es visible]"
+
+Ejemplos de buena respuesta:
+- "Pagué 25.50 soles a Juan Perez por Yape"
+- "Pagué 85.90 soles en Tottus por abarrotes"
+- "Recibí 500 soles por transferencia de Maria Garcia"
+- "Pagué 40 soles en Inkafarma por medicinas"
+
+Reglas:
+- El monto debe ser el número EXACTO que aparece en la imagen (con decimales si los tiene).
+- Si la imagen es de Yape/Plin, menciona ese medio de pago en la frase.
+- Si es una boleta de tienda/restaurante, usa el nombre del establecimiento si es legible.
+- Si de verdad no puedes leer ningún monto en la imagen, responde EXACTAMENTE: "ERROR: no se encontró un monto".
+- No agregues explicaciones, solo la frase (o el mensaje de error exacto).
+`;
+
+  const cleanMimeType = (mimeType || "image/jpeg").split(";")[0].trim();
+
+  try {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${apiKey}`;
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [
+          {
+            parts: [
+              { text: prompt },
+              {
+                inline_data: {
+                  mime_type: cleanMimeType,
+                  data: imageBuffer.toString("base64"),
+                },
+              },
+            ],
+          },
+        ],
+        generationConfig: {
+          temperature: 0,
+        },
+      }),
+    });
+
+    if (!res.ok) {
+      const errorBody = await res.text();
+      console.error(`[WhatsApp Parser Gemini Vision Error] HTTP ${res.status}:`, errorBody);
+      return null;
+    }
+
+    const data = await res.json();
+    const rawText = (data?.candidates?.[0]?.content?.parts?.[0]?.text || "").trim();
+
+    if (!rawText || rawText.toUpperCase().startsWith("ERROR")) {
+      return null;
+    }
+
+    return rawText;
+  } catch (err) {
+    console.error("[WhatsApp Parser Gemini Vision Error]", err.stack || err);
+    return null;
+  }
+}
+
+async function parseTransactionFromImage(imageBuffer, mimeType) {
+  const [categories, accounts] = await Promise.all([
+    categoriesService.listCategories(),
+    db.all("SELECT * FROM accounts ORDER BY id ASC"),
+  ]);
+
+  if (!categories.length || !accounts.length) {
+    throw new Error("No hay cuentas o categorías configuradas en la app.");
+  }
+
+  if (!process.env.GEMINI_API_KEY) {
+    throw new Error("Las capturas/boletas requieren GEMINI_API_KEY configurada.");
+  }
+
+  const description = await describeTransactionImage(imageBuffer, mimeType);
+  if (!description) {
+    return null;
+  }
+
+  console.log(`[WhatsApp Parser] Imagen descrita por Gemini Vision: "${description}"`);
+  return resolveTransactionFromText(description, categories, accounts);
+}
+
 module.exports = {
   parseTransactionFromText,
+  parseTransactionFromImage,
   parseTransactionFromAudio,
 };

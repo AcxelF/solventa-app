@@ -312,6 +312,27 @@ app.post("/api/whatsapp/webhook", handle(async (req, res) => {
           `❌ Error al procesar la nota de voz: ${err.message}`
         );
       }
+    } else if (message && message.type === "image") {
+      const fromNumber = message.from;
+      const mediaId = message.image.id;
+
+      console.log(`[WhatsApp Webhook] Imagen recibida de ${fromNumber} (media_id: ${mediaId})`);
+
+      try {
+        const media = await whatsappService.downloadWhatsAppMedia(mediaId);
+        if (!media) {
+          throw new Error("No pude descargar la imagen.");
+        }
+
+        const parsed = await whatsappParser.parseTransactionFromImage(media.buffer, media.mimeType);
+        await handleParsedTransaction(fromNumber, parsed, "Gasto registrado por foto de comprobante/boleta");
+      } catch (err) {
+        console.error("[WhatsApp Process Error]", err);
+        await whatsappService.sendWhatsAppMessage(
+          fromNumber,
+          `❌ Error al procesar la imagen: ${err.message}`
+        );
+      }
     }
   }
 
