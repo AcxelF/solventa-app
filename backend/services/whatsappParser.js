@@ -184,9 +184,22 @@ async function transcribeAudioWithWhisper(audioBuffer, mimeType) {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) return null;
 
+  // Diagnóstico: detectar si la env var llegó corrupta (ej. autocorrección al pegarla)
+  // sin loguear la key completa.
+  const nonAsciiChars = [...apiKey].filter((c) => c.charCodeAt(0) > 255);
+  if (nonAsciiChars.length > 0) {
+    console.error(
+      `[WhatsApp Parser Whisper] OPENAI_API_KEY parece corrupta: ${nonAsciiChars.length} caracter(es) no-ASCII, longitud total ${apiKey.length}`
+    );
+  }
+
   try {
     const cleanMimeType = (mimeType || "audio/ogg").split(";")[0].trim();
     const extension = cleanMimeType.includes("ogg") ? "ogg" : cleanMimeType.includes("mp4") ? "mp4" : "ogg";
+
+    console.log(
+      `[WhatsApp Parser Whisper] mimeType original="${mimeType}" limpio="${cleanMimeType}" bufferBytes=${audioBuffer.length}`
+    );
 
     const form = new FormData();
     form.append("file", new Blob([audioBuffer], { type: cleanMimeType }), `audio.${extension}`);
@@ -208,7 +221,7 @@ async function transcribeAudioWithWhisper(audioBuffer, mimeType) {
     const data = await res.json();
     return data.text?.trim() || null;
   } catch (err) {
-    console.error("[WhatsApp Parser Whisper Error]", err);
+    console.error("[WhatsApp Parser Whisper Error]", err.stack || err);
     return null;
   }
 }
