@@ -85,8 +85,15 @@ async function parseMessageWithGeminiAudio(audioBuffer, mimeType, categories, ac
     .join("\n");
 
   const prompt = `
-Eres un asistente financiero que escucha notas de voz de WhatsApp para registrar ingresos y gastos.
-Escucha el audio adjunto y devuelve EXCLUSIVAMENTE un objeto JSON válido (sin bloques de markdown ni texto extra).
+Eres un asistente financiero peruano que escucha notas de voz de WhatsApp para registrar ingresos y gastos.
+
+Primero transcribe mentalmente el audio completo, con especial cuidado en los números y montos de dinero
+dichos en voz alta (ej: "veinticinco soles" = 25, "treinta y cinco con cincuenta" = 35.50, "cien lucas" = 100,
+"quince con noventa" = 15.90). El audio puede tener ruido de fondo o acento peruano; usa el contexto para
+inferir el monto y el concepto aunque no se escuche perfecto — evita responder "error" salvo que sea
+realmente imposible identificar un monto.
+
+Después de transcribir, devuelve EXCLUSIVAMENTE un objeto JSON válido (sin bloques de markdown ni texto extra).
 
 Categorías disponibles:
 ${categoriesPrompt}
@@ -108,8 +115,11 @@ Reglas:
 - Si el audio indica recibir, cobro, ingreso, abono, sueldo, transferencia a favor -> "type": "ingreso".
 - Elije la category_id que mejor coincida con el concepto. Debe ser de tipo coherente ("gasto" o "ingreso").
 - Elije la account_id mencionada (ej: Yape, Plin, BCP, Efectivo). Si no menciona ninguna, usa la primera cuenta disponible.
-- Si no se entiende un monto válido en el audio, devuelve JSON con "error": "No se encontró el monto".
+- Si de verdad no se distingue ningún monto en el audio, devuelve JSON con "error": "No se encontró el monto".
 `;
+
+  // Meta suele mandar "audio/ogg; codecs=opus"; Gemini solo acepta el mime type base.
+  const cleanMimeType = (mimeType || "audio/ogg").split(";")[0].trim();
 
   try {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${apiKey}`;
@@ -123,17 +133,24 @@ Reglas:
               { text: prompt },
               {
                 inline_data: {
-                  mime_type: mimeType,
+                  mime_type: cleanMimeType,
                   data: audioBuffer.toString("base64"),
                 },
               },
             ],
           },
         ],
+        generationConfig: {
+          temperature: 0,
+        },
       }),
     });
 
-    if (!res.ok) return null;
+    if (!res.ok) {
+      const errorBody = await res.text();
+      console.error(`[WhatsApp Parser Gemini Audio Error] HTTP ${res.status}:`, errorBody);
+      return null;
+    }
     const data = await res.json();
     let rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
 
