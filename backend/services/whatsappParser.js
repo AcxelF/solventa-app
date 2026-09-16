@@ -94,10 +94,20 @@ sueltos (ej. un "61" que no tiene nada que ver con el monto real). En ese caso:
 - El monto real es el número que aparece INMEDIATAMENTE junto a un símbolo de moneda: "S/", "SI",
   "S1" (el OCR a veces lee mal "S/" como "SI" o "S1"), o la palabra "soles". Ignora cualquier otro
   número suelto que no tenga ese símbolo al lado, aunque aparezca antes en el texto.
-- El nombre de la persona o negocio para el campo "description" es la palabra o frase corta que
-  aparece INMEDIATAMENTE DESPUÉS del monto (ej. después de "¡Yapeaste! SI 7" viene "Luis Alm*" —
-  ese es el destinatario). Usa "Para: <nombre>" si es un gasto, o "De: <nombre>" si es un ingreso.
-  No uses descripciones genéricas como "Pago Yape" si el nombre real está disponible en el texto.
+- El nombre de la persona o negocio para "description" puede aparecer ANTES o DESPUÉS del monto,
+  según la app. Ejemplos reales:
+  · Yape: "¡Yapeaste! SI 7 | Luis Alm*" -> el nombre "Luis Alm*" va DESPUÉS del monto.
+  · Transferencia bancaria: "Transferiste S/ 10.00 a Acxel Fernandez" -> el nombre va DESPUÉS,
+    en la misma frase, luego de la palabra "a".
+  · Plin: "Pagaste con Plin | Felipe Val*** | S/ 1.00" -> el nombre va ANTES del monto.
+  Usa "Para: <nombre>" si es un gasto, o "De: <nombre>" si es un ingreso. No uses descripciones
+  genéricas como "Pago Yape" o "Transferencia" si el nombre real está disponible en el texto.
+- Si el texto dice "Pagaste con Plin" o menciona "Plin", la cuenta es "Scotiabank" (ver alias de
+  cuentas abajo) AUNQUE el mismo comprobante también diga "Destino: Yape" — eso es la app del
+  destinatario (a quién le llegó la plata), no la cuenta del usuario que envió el dinero.
+- Si el texto NO menciona ninguna app/banco reconocible por su nombre (ej. un comprobante genérico
+  que solo dice "Comprobante", "Transferiste", "Cuenta Ahorro Soles", sin decir el banco), usa la
+  primera cuenta disponible de la lista — no inventes ni asumas un banco que no está escrito.
 
 Categorías disponibles (usa SIEMPRE uno de estos IDs, nunca inventes uno):
 ${categoriesPrompt}
@@ -670,7 +680,7 @@ async function extractTextWithOcrSpace(imageBuffer, mimeType) {
   }
 }
 
-async function parseTransactionFromImage(imageBuffer, mimeType) {
+async function parseTransactionFromImage(imageBuffer, mimeType, caption) {
   const [categories, accounts] = await Promise.all([
     categoriesService.listCategories(),
     db.all("SELECT * FROM accounts ORDER BY id ASC"),
@@ -680,13 +690,19 @@ async function parseTransactionFromImage(imageBuffer, mimeType) {
     throw new Error("No hay cuentas o categorías configuradas en la app.");
   }
 
+  // Si el usuario le puso un texto/caption a la foto (ej. "Falabella"), lo
+  // anteponemos: sirve para identificar la cuenta cuando el recibo en sí no
+  // menciona el banco/app por su nombre (comprobantes genéricos sin logo legible).
+  const captionPrefix = caption ? `${caption.trim()}\n` : "";
+
   // Preferido: leer el texto de la imagen con OCR (barato/alto límite) y
   // reusar el mismo pipeline de texto (Gemini + Groq + regex), en vez de
   // depender de Gemini Vision para "entender" la imagen.
   const ocrText = await extractTextWithOcrSpace(imageBuffer, mimeType);
   if (ocrText) {
-    console.log(`[WhatsApp Parser] Imagen leída con OCR: "${ocrText.replace(/\n/g, " | ")}"`);
-    const result = await resolveTransactionFromText(ocrText, categories, accounts);
+    const combinedText = captionPrefix + ocrText;
+    console.log(`[WhatsApp Parser] Imagen leída con OCR: "${combinedText.replace(/\n/g, " | ")}"`);
+    const result = await resolveTransactionFromText(combinedText, categories, accounts);
     if (result) return result;
   }
 
@@ -700,8 +716,9 @@ async function parseTransactionFromImage(imageBuffer, mimeType) {
     return null;
   }
 
-  console.log(`[WhatsApp Parser] Imagen descrita por Gemini Vision: "${description}"`);
-  return resolveTransactionFromText(description, categories, accounts);
+  const fullDescription = captionPrefix + description;
+  console.log(`[WhatsApp Parser] Imagen descrita por Gemini Vision: "${fullDescription}"`);
+  return resolveTransactionFromText(fullDescription, categories, accounts);
 }
 
 module.exports = {

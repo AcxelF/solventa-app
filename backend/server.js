@@ -315,8 +315,9 @@ app.post("/api/whatsapp/webhook", handle(async (req, res) => {
     } else if (message && message.type === "image") {
       const fromNumber = message.from;
       const mediaId = message.image.id;
+      const caption = message.image.caption;
 
-      console.log(`[WhatsApp Webhook] Imagen recibida de ${fromNumber} (media_id: ${mediaId})`);
+      console.log(`[WhatsApp Webhook] Imagen recibida de ${fromNumber} (media_id: ${mediaId})${caption ? ` con caption: "${caption}"` : ""}`);
 
       try {
         const media = await whatsappService.downloadWhatsAppMedia(mediaId);
@@ -324,7 +325,7 @@ app.post("/api/whatsapp/webhook", handle(async (req, res) => {
           throw new Error("No pude descargar la imagen.");
         }
 
-        const parsed = await whatsappParser.parseTransactionFromImage(media.buffer, media.mimeType);
+        const parsed = await whatsappParser.parseTransactionFromImage(media.buffer, media.mimeType, caption);
         await handleParsedTransaction(fromNumber, parsed, "Gasto registrado por foto de comprobante/boleta");
       } catch (err) {
         console.error("[WhatsApp Process Error]", err);
