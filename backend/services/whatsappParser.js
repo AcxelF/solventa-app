@@ -21,7 +21,7 @@ Para ingresos usa: Sueldo (pago de trabajo formal), Freelance (trabajo independi
 
 const ACCOUNT_ALIAS_GUIDE = `
 Alias de cuentas (úsalos siempre que se mencione alguna de estas formas, aunque no coincida textualmente con el nombre de la cuenta):
-- "CMR", "C M R", "cmr credito" -> cuenta "CMR Credito".
+- "CMR", "C M R", "cmr credito", "cemerre" -> cuenta "CMR Credito".
 - "Falabella", "banco falabella" -> cuenta "Banco Falabella".
 - "tarjeta de alimento", "tarjeta de alimentos", "vales" -> cuenta "Tarjeta de Alimentos".
 - "Plin" -> cuenta "Scotiabank" (el Plin de este usuario está vinculado a esa cuenta).
