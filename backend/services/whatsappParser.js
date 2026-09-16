@@ -180,6 +180,39 @@ ${buildTransactionRules("el audio")}- Si de verdad no se distingue ningún monto
   }
 }
 
+async function transcribeAudioWithWhisper(audioBuffer, mimeType) {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) return null;
+
+  try {
+    const cleanMimeType = (mimeType || "audio/ogg").split(";")[0].trim();
+    const extension = cleanMimeType.includes("ogg") ? "ogg" : cleanMimeType.includes("mp4") ? "mp4" : "ogg";
+
+    const form = new FormData();
+    form.append("file", new Blob([audioBuffer], { type: cleanMimeType }), `audio.${extension}`);
+    form.append("model", "whisper-1");
+    form.append("language", "es");
+
+    const res = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${apiKey}` },
+      body: form,
+    });
+
+    if (!res.ok) {
+      const errorBody = await res.text();
+      console.error(`[WhatsApp Parser Whisper Error] HTTP ${res.status}:`, errorBody);
+      return null;
+    }
+
+    const data = await res.json();
+    return data.text?.trim() || null;
+  } catch (err) {
+    console.error("[WhatsApp Parser Whisper Error]", err);
+    return null;
+  }
+}
+
 function parseMessageRegex(userText, categories, accounts) {
   const textLower = userText.toLowerCase();
 
@@ -237,16 +270,7 @@ function parseMessageRegex(userText, categories, accounts) {
   };
 }
 
-async function parseTransactionFromText(userText) {
-  const [categories, accounts] = await Promise.all([
-    categoriesService.listCategories(),
-    db.all("SELECT * FROM accounts ORDER BY id ASC"),
-  ]);
-
-  if (!categories.length || !accounts.length) {
-    throw new Error("No hay cuentas o categorías configuradas en la app.");
-  }
-
+async function resolveTransactionFromText(userText, categories, accounts) {
   // Intentar con Gemini AI si está disponible (con fallback seguro)
   let result = null;
   try {
@@ -271,6 +295,19 @@ async function parseTransactionFromText(userText) {
   };
 }
 
+async function parseTransactionFromText(userText) {
+  const [categories, accounts] = await Promise.all([
+    categoriesService.listCategories(),
+    db.all("SELECT * FROM accounts ORDER BY id ASC"),
+  ]);
+
+  if (!categories.length || !accounts.length) {
+    throw new Error("No hay cuentas o categorías configuradas en la app.");
+  }
+
+  return resolveTransactionFromText(userText, categories, accounts);
+}
+
 async function parseTransactionFromAudio(audioBuffer, mimeType) {
   const [categories, accounts] = await Promise.all([
     categoriesService.listCategories(),
@@ -281,20 +318,30 @@ async function parseTransactionFromAudio(audioBuffer, mimeType) {
     throw new Error("No hay cuentas o categorías configuradas en la app.");
   }
 
-  if (!process.env.GEMINI_API_KEY) {
-    throw new Error("Las notas de voz requieren GEMINI_API_KEY configurada (no hay fallback sin IA para audio).");
+  // Preferido: transcribir con Whisper y reusar el mismo pipeline de texto
+  // (Gemini + fallback de regex), en vez de que Gemini escuche el audio directo.
+  const transcript = await transcribeAudioWithWhisper(audioBuffer, mimeType);
+  if (transcript) {
+    console.log(`[WhatsApp Parser] Audio transcrito con Whisper: "${transcript}"`);
+    const result = await resolveTransactionFromText(transcript, categories, accounts);
+    if (result) return result;
   }
 
-  const result = await parseMessageWithGeminiAudio(audioBuffer, mimeType, categories, accounts);
+  // Respaldo: si no hay Whisper configurado o falló, usar Gemini escuchando el audio directo.
+  if (!process.env.GEMINI_API_KEY) {
+    throw new Error("No se pudo transcribir el audio y no hay GEMINI_API_KEY como respaldo.");
+  }
 
-  if (!result || !result.amount) {
+  const fallbackResult = await parseMessageWithGeminiAudio(audioBuffer, mimeType, categories, accounts);
+
+  if (!fallbackResult || !fallbackResult.amount) {
     return null;
   }
 
   return {
-    ...result,
-    category: categories.find((c) => c.id === result.category_id),
-    account: accounts.find((a) => a.id === result.account_id),
+    ...fallbackResult,
+    category: categories.find((c) => c.id === fallbackResult.category_id),
+    account: accounts.find((a) => a.id === fallbackResult.account_id),
   };
 }
 
