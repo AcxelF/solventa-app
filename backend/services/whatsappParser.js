@@ -570,6 +570,46 @@ Reglas:
   }
 }
 
+async function extractTextWithOcrSpace(imageBuffer, mimeType) {
+  const apiKey = process.env.OCRSPACE_API_KEY;
+  if (!apiKey) return null;
+
+  try {
+    const cleanMimeType = (mimeType || "image/jpeg").split(";")[0].trim();
+    const extension = cleanMimeType.includes("png") ? "png" : "jpg";
+
+    const form = new FormData();
+    form.append("file", new Blob([imageBuffer], { type: cleanMimeType }), `image.${extension}`);
+    form.append("language", "spa");
+    form.append("OCREngine", "2");
+    form.append("scale", "true");
+
+    const res = await fetch("https://api.ocr.space/parse/image", {
+      method: "POST",
+      headers: { "apikey": apiKey },
+      body: form,
+    });
+
+    if (!res.ok) {
+      const errorBody = await res.text();
+      console.error(`[WhatsApp Parser OCR Error] HTTP ${res.status}:`, errorBody);
+      return null;
+    }
+
+    const data = await res.json();
+    if (data.IsErroredOnProcessing) {
+      console.error("[WhatsApp Parser OCR Error]", data.ErrorMessage || data);
+      return null;
+    }
+
+    const text = data?.ParsedResults?.[0]?.ParsedText?.trim();
+    return text || null;
+  } catch (err) {
+    console.error("[WhatsApp Parser OCR Error]", err.stack || err);
+    return null;
+  }
+}
+
 async function parseTransactionFromImage(imageBuffer, mimeType) {
   const [categories, accounts] = await Promise.all([
     categoriesService.listCategories(),
@@ -580,8 +620,19 @@ async function parseTransactionFromImage(imageBuffer, mimeType) {
     throw new Error("No hay cuentas o categorías configuradas en la app.");
   }
 
+  // Preferido: leer el texto de la imagen con OCR (barato/alto límite) y
+  // reusar el mismo pipeline de texto (Gemini + Groq + regex), en vez de
+  // depender de Gemini Vision para "entender" la imagen.
+  const ocrText = await extractTextWithOcrSpace(imageBuffer, mimeType);
+  if (ocrText) {
+    console.log(`[WhatsApp Parser] Imagen leída con OCR: "${ocrText.replace(/\n/g, " | ")}"`);
+    const result = await resolveTransactionFromText(ocrText, categories, accounts);
+    if (result) return result;
+  }
+
+  // Respaldo: si no hay OCR configurado o no sacó nada usable, usar Gemini Vision.
   if (!process.env.GEMINI_API_KEY) {
-    throw new Error("Las capturas/boletas requieren GEMINI_API_KEY configurada.");
+    throw new Error("No se pudo leer la imagen y no hay GEMINI_API_KEY como respaldo.");
   }
 
   const description = await describeTransactionImage(imageBuffer, mimeType);
