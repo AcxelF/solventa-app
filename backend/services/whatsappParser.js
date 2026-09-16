@@ -10,11 +10,12 @@ const categoriesService = require("./categories");
 const CATEGORY_KEYWORDS = {
   "Alimentación": ["almuerzo", "cena", "desayuno", "restaurante", "delivery", "mercado", "supermercado", "comida"],
   "Transporte": ["taxi", "uber", "cabify", "pasaje", "combi", "gasolina", "peaje", "estacionamiento"],
-  "Vivienda": ["alquiler", "renta", "luz", "agua", "internet", "gas", "mantenimiento"],
+  "Vivienda": ["alquiler", "renta", "luz", "agua", "internet", "gas natural", "mantenimiento", "arriendo"],
   "Entretenimiento": ["cine", "salida", "fiesta", "bar", "discoteca", "videojuego", "concierto"],
   "Salud": ["farmacia", "doctor", "médico", "medico", "medicina", "consulta", "seguro", "dentista"],
   "Educación": ["curso", "universidad", "instituto", "libros", "colegio", "matrícula", "matricula"],
   "streaming": ["netflix", "spotify", "disney", "youtube premium", "suscripción", "suscripcion"],
+  "Otros": ["ropa", "zapatillas", "zapatos", "regalo", "vestimenta", "compras"],
 };
 
 const INCOME_CATEGORY_KEYWORDS = {
@@ -33,7 +34,7 @@ const ACCOUNT_ALIASES = {
 
 function buildCategoryGuideText() {
   const gastoLines = Object.entries(CATEGORY_KEYWORDS)
-    .map(([name, keywords]) => `- ${name}: ${keywords.join(", ")}.`)
+    .map(([name, keywords]) => `- ${name}: ${keywords.join(", ")}${name === "Otros" ? ", o cualquier gasto que no encaje en las demás categorías" : ""}.`)
     .join("\n");
   const ingresoLines = Object.entries(INCOME_CATEGORY_KEYWORDS)
     .map(([name, keywords]) => `${name} (${keywords.join(", ")})`)
@@ -42,7 +43,6 @@ function buildCategoryGuideText() {
   return `
 Guía de qué categoría de gasto usar según el concepto (úsala como referencia, no es una lista cerrada):
 ${gastoLines}
-- Otros: cualquier gasto que no encaje claramente en las anteriores.
 
 Para ingresos usa: ${ingresoLines}, Otros (cualquier otro ingreso).
 `;
@@ -276,23 +276,22 @@ async function transcribeAudioWithWhisper(audioBuffer, mimeType) {
   }
 }
 
+// Coincidencia por palabra/frase completa: evita falsos positivos como
+// "gas" adentro de "gasté" (que activaba Vivienda en cualquier gasto).
+function containsPhrase(text, phrase) {
+  const escaped = phrase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const boundary = "[^a-záéíóúñü0-9]";
+  const regex = new RegExp(`(^|${boundary})${escaped}(${boundary}|$)`, "i");
+  return regex.test(text);
+}
+
 function parseMessageRegex(userText, categories, accounts) {
   const textLower = userText.toLowerCase();
 
   // 1. Detectar Tipo
   let type = "gasto";
-  if (
-    textLower.includes("ingreso") ||
-    textLower.includes("cobré") ||
-    textLower.includes("cobre") ||
-    textLower.includes("gané") ||
-    textLower.includes("gane") ||
-    textLower.includes("sueldo") ||
-    textLower.includes("depósito") ||
-    textLower.includes("deposito") ||
-    textLower.includes("recibí") ||
-    textLower.includes("recibi")
-  ) {
+  const incomeKeywords = ["ingreso", "cobré", "cobre", "gané", "gane", "sueldo", "depósito", "deposito", "recibí", "recibi"];
+  if (incomeKeywords.some((kw) => containsPhrase(textLower, kw))) {
     type = "ingreso";
   }
 
@@ -309,7 +308,7 @@ function parseMessageRegex(userText, categories, accounts) {
   let accountMatched = false;
 
   for (const [accountName, aliases] of Object.entries(ACCOUNT_ALIASES)) {
-    if (aliases.some((alias) => textLower.includes(alias))) {
+    if (aliases.some((alias) => containsPhrase(textLower, alias))) {
       const acc = accounts.find((a) => a.name.toLowerCase() === accountName.toLowerCase());
       if (acc) {
         accountId = acc.id;
@@ -321,21 +320,23 @@ function parseMessageRegex(userText, categories, accounts) {
 
   if (!accountMatched) {
     for (const acc of accounts) {
-      if (textLower.includes(acc.name.toLowerCase())) {
+      if (containsPhrase(textLower, acc.name.toLowerCase())) {
         accountId = acc.id;
         break;
       }
     }
   }
 
-  // 4. Matchear Categoría (primero por keywords conocidos, luego por nombre exacto)
+  // 4. Matchear Categoría (primero por keywords conocidos, luego por nombre exacto,
+  // y si nada coincide, cae en "Otros" en vez de la primera categoría de la lista)
   const validCategories = categories.filter((c) => c.type === type);
-  let categoryId = validCategories[0]?.id || (type === "gasto" ? 1 : 2);
+  const otrosCategory = validCategories.find((c) => c.name.toLowerCase() === "otros");
+  let categoryId = otrosCategory?.id ?? validCategories[0]?.id ?? (type === "gasto" ? 1 : 2);
   let categoryMatched = false;
 
   const keywordMap = type === "gasto" ? CATEGORY_KEYWORDS : INCOME_CATEGORY_KEYWORDS;
   for (const [categoryName, keywords] of Object.entries(keywordMap)) {
-    if (keywords.some((kw) => textLower.includes(kw))) {
+    if (keywords.some((kw) => containsPhrase(textLower, kw))) {
       const cat = validCategories.find((c) => c.name.toLowerCase() === categoryName.toLowerCase());
       if (cat) {
         categoryId = cat.id;
@@ -347,8 +348,9 @@ function parseMessageRegex(userText, categories, accounts) {
 
   if (!categoryMatched) {
     for (const cat of validCategories) {
-      if (textLower.includes(cat.name.toLowerCase())) {
+      if (containsPhrase(textLower, cat.name.toLowerCase())) {
         categoryId = cat.id;
+        categoryMatched = true;
         break;
       }
     }
