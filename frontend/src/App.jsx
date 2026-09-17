@@ -64,7 +64,10 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-bg text-text">
-      <header className="border-b border-border bg-bg">
+      <header
+        className="border-b border-border bg-bg"
+        style={{ paddingTop: "env(safe-area-inset-top)" }}
+      >
         <div className="mx-auto flex w-full max-w-[1920px] flex-wrap items-center justify-between gap-4 px-6 py-4">
           <div className="order-1 flex items-center gap-3">
             <span className="flex h-8 w-9 items-center justify-center rounded-lg bg-text text-sm font-bold text-bg">
