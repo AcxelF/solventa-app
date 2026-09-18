@@ -41,12 +41,14 @@ async function getCard(id) {
   ]);
 }
 
-async function sumSpending(accountId, fromISO, toISO, inclusive) {
-  const sql = inclusive
-    ? `SELECT COALESCE(SUM(amount), 0) AS total FROM transactions
-       WHERE account_id = ? AND type = 'gasto' AND date >= ? AND date <= ?`
-    : `SELECT COALESCE(SUM(amount), 0) AS total FROM transactions
-       WHERE account_id = ? AND type = 'gasto' AND date >= ? AND date < ?`;
+// El día de corte pertenece al ciclo que se cierra ese día (como en el
+// estado de cuenta real: "10/08 al 09/09" incluye el 9 de septiembre), así
+// que el límite inferior/superior de cada rango se controla por separado.
+async function sumSpending(accountId, fromISO, toISO, { fromInclusive = true, toInclusive = true } = {}) {
+  const fromOp = fromInclusive ? ">=" : ">";
+  const toOp = toInclusive ? "<=" : "<";
+  const sql = `SELECT COALESCE(SUM(amount), 0) AS total FROM transactions
+     WHERE account_id = ? AND type = 'gasto' AND date ${fromOp} ? AND date ${toOp} ?`;
   const row = await db.get(sql, [accountId, fromISO, toISO]);
   return row.total;
 }
@@ -107,10 +109,17 @@ async function computeCycle(card) {
   const prevCutISO = toISO(prevCut);
   const lastCutISO = toISO(lastCut);
 
-  // Consumo del periodo actual: desde el corte anterior hasta hoy (inclusivo).
-  const currentConsumption = await sumSpending(card.id, lastCutISO, todayISO, true);
-  // Monto a pagar: consumo del periodo ya cerrado entre los dos cortes previos.
-  const amountDue = await sumSpending(card.id, prevCutISO, lastCutISO, false);
+  // Consumo del periodo actual: desde el día siguiente al corte anterior hasta hoy
+  // (el día del corte ya quedó facturado en el periodo cerrado, no en este).
+  const currentConsumption = await sumSpending(card.id, lastCutISO, todayISO, {
+    fromInclusive: false,
+    toInclusive: true,
+  });
+  // Monto a pagar: consumo del periodo ya cerrado, incluyendo el día del corte.
+  const amountDue = await sumSpending(card.id, prevCutISO, lastCutISO, {
+    fromInclusive: false,
+    toInclusive: true,
+  });
 
   const daysToNextPayment = Math.round(
     (new Date(`${toISO(nextPayment)}T00:00:00`) -
