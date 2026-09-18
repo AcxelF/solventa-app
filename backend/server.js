@@ -65,6 +65,17 @@ app.use("/api", rateLimit({ windowMs: 60 * 1000, max: 120 }));
 // El webhook de WhatsApp lo llama Meta con su propio patrón de reintentos;
 // un límite más alto evita bloquear entregas legítimas, solo frena abuso.
 app.use("/api/whatsapp/webhook", rateLimit({ windowMs: 60 * 1000, max: 60 }));
+// El login es el único endpoint donde "muchos intentos rápidos" significa
+// literalmente "alguien probando contraseñas": límite mucho más estricto
+// que el resto de la API.
+app.use(
+  "/api/auth/login",
+  rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 10,
+    message: { error: "Demasiados intentos. Espera unos minutos." },
+  })
+);
 
 // ---- Autenticación por login + cookie httpOnly ----
 // Esta API es de uso personal: sin esto, cualquiera que encuentre la URL
