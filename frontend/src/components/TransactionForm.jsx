@@ -207,7 +207,11 @@ export default function TransactionForm({
             <div className="mt-3">
               <Field
                 label="Número de cuotas"
-                hint="Se crea un movimiento por cada cuota, uno por mes, empezando en la fecha de abajo."
+                hint={
+                  selectedAccount?.interest_rate
+                    ? `Se calculará capital + interés por cuota usando la TEA de la tarjeta (${selectedAccount.interest_rate}%), como en tu estado de cuenta.`
+                    : "Se crea un movimiento por cada cuota, uno por mes, empezando en la fecha de abajo. Esta tarjeta no tiene TEA configurada, así que se reparte el monto en partes iguales sin interés."
+                }
               >
                 <TextInput
                   type="number"

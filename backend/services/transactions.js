@@ -137,6 +137,48 @@ function addMonthsISO(dateISO, delta) {
   return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 
+function round2(value) {
+  return Math.round(value * 100) / 100;
+}
+
+// Reparte el total en cuotas iguales (sin interés), ajustando centavos en la
+// última cuota para que la suma exacta del total no se pierda por redondeo.
+// Se usa cuando la cuenta no tiene una TEA configurada.
+function evenInstallments(totalAmount, totalInstallments) {
+  const baseAmount = Math.floor((totalAmount / totalInstallments) * 100) / 100;
+  const roundedTotal = Math.round(baseAmount * 100) * totalInstallments;
+  const remainder = Math.round(totalAmount * 100) - roundedTotal;
+
+  const schedule = [];
+  for (let i = 0; i < totalInstallments; i++) {
+    const isLast = i === totalInstallments - 1;
+    const amount = isLast ? baseAmount + remainder / 100 : baseAmount;
+    schedule.push({ amount: round2(amount) });
+  }
+  return schedule;
+}
+
+// Cuota fija (sistema francés): mismo pago total cada mes, con interés sobre
+// el saldo pendiente calculado a partir de la TEA de la tarjeta. Así cada
+// cuota trae capital + interés como en el estado de cuenta real del banco,
+// en vez de solo repartir el precio de lista entre el número de cuotas.
+function amortizedInstallments(totalAmount, totalInstallments, annualRatePercent) {
+  const monthlyRate = Math.pow(1 + annualRatePercent / 100, 1 / 12) - 1;
+  const payment =
+    (totalAmount * monthlyRate) / (1 - Math.pow(1 + monthlyRate, -totalInstallments));
+
+  let remaining = totalAmount;
+  const schedule = [];
+  for (let i = 0; i < totalInstallments; i++) {
+    const isLast = i === totalInstallments - 1;
+    const interest = remaining * monthlyRate;
+    const capital = isLast ? remaining : payment - interest;
+    schedule.push({ amount: round2(capital + interest) });
+    remaining -= capital;
+  }
+  return schedule;
+}
+
 // Crea una compra en cuotas: una transacción por cada cuota, una por mes,
 // cada una con el monto de esa cuota (no el total). Así el saldo/resumen
 // mensual y el ciclo de la tarjeta (que suman por fecha) solo cuentan la
@@ -158,16 +200,14 @@ async function createInstallmentPurchase({
   const startDate = date || getTodayISO();
   const groupId = `inst_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
-  // Reparte el total en cuotas iguales, ajustando centavos en la última
-  // cuota para que la suma exacta del total no se pierda por redondeo.
-  const baseAmount = Math.floor((total_amount / total_installments) * 100) / 100;
-  const roundedTotal = Math.round(baseAmount * 100) * total_installments;
-  const remainder = Math.round(total_amount * 100) - roundedTotal;
+  const account = await db.get("SELECT interest_rate FROM accounts WHERE id = ?", [account_id]);
+  const schedule = account?.interest_rate
+    ? amortizedInstallments(total_amount, total_installments, account.interest_rate)
+    : evenInstallments(total_amount, total_installments);
 
   const createdIds = [];
   for (let i = 0; i < total_installments; i++) {
-    const isLast = i === total_installments - 1;
-    const amount = isLast ? baseAmount + remainder / 100 : baseAmount;
+    const amount = schedule[i].amount;
     const installmentDate = addMonthsISO(startDate, i);
     const installmentDescription = description
       ? `${description} (cuota ${i + 1}/${total_installments})`
