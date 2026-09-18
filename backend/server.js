@@ -306,39 +306,39 @@ app.delete("/api/contributions/:id", handle(async (req, res) => {
 }));
 
 // ---- Tarjetas de crédito ----
-app.get("/api/credit-cards", handle(async (req, res) => {
+app.get("/api/cards", handle(async (req, res) => {
   res.json(await creditCardsService.listCreditCards());
 }));
 
-app.post("/api/credit-cards", handle(async (req, res) => {
+app.post("/api/cards", handle(async (req, res) => {
   res.status(201).json(await creditCardsService.createCreditCard(req.body));
 }));
 
-app.get("/api/credit-cards/:id", handle(async (req, res) => {
+app.get("/api/cards/:id", handle(async (req, res) => {
   const card = await creditCardsService.getCreditCard(Number(req.params.id));
   if (!card) return res.status(404).json({ error: "Tarjeta no encontrada." });
   res.json(card);
 }));
 
-app.put("/api/credit-cards/:id", handle(async (req, res) => {
+app.put("/api/cards/:id", handle(async (req, res) => {
   const card = await creditCardsService.updateCreditCard(Number(req.params.id), req.body);
   if (!card) return res.status(404).json({ error: "Tarjeta no encontrada." });
   res.json(card);
 }));
 
-app.delete("/api/credit-cards/:id", handle(async (req, res) => {
+app.delete("/api/cards/:id", handle(async (req, res) => {
   const deleted = await creditCardsService.deleteCreditCard(Number(req.params.id));
   if (!deleted) return res.status(404).json({ error: "Tarjeta no encontrada." });
   res.status(204).send();
 }));
 
-app.post("/api/credit-cards/:id/payments", handle(async (req, res) => {
+app.post("/api/cards/:id/payments", handle(async (req, res) => {
   const card = await creditCardsService.markPaymentPaid(Number(req.params.id), req.body.due_date);
   if (!card) return res.status(404).json({ error: "Tarjeta no encontrada." });
   res.status(201).json(card);
 }));
 
-app.delete("/api/credit-cards/:id/payments/:dueDate", handle(async (req, res) => {
+app.delete("/api/cards/:id/payments/:dueDate", handle(async (req, res) => {
   const card = await creditCardsService.unmarkPaymentPaid(Number(req.params.id), req.params.dueDate);
   if (!card) return res.status(404).json({ error: "Tarjeta no encontrada." });
   res.json(card);

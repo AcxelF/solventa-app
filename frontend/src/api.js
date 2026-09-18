@@ -269,17 +269,17 @@ export async function deleteContribution(id) {
 
 // ---- Tarjetas de crédito ----
 export async function fetchCreditCards() {
-  const res = await apiFetch(`${API_BASE}/credit-cards`);
+  const res = await apiFetch(`${API_BASE}/cards`);
   return handleResponse(res);
 }
 
 export async function fetchCreditCard(id) {
-  const res = await apiFetch(`${API_BASE}/credit-cards/${id}`);
+  const res = await apiFetch(`${API_BASE}/cards/${id}`);
   return handleResponse(res);
 }
 
 export async function createCreditCard(payload) {
-  const res = await apiFetch(`${API_BASE}/credit-cards`, {
+  const res = await apiFetch(`${API_BASE}/cards`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -288,7 +288,7 @@ export async function createCreditCard(payload) {
 }
 
 export async function updateCreditCard(id, payload) {
-  const res = await apiFetch(`${API_BASE}/credit-cards/${id}`, {
+  const res = await apiFetch(`${API_BASE}/cards/${id}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -297,14 +297,14 @@ export async function updateCreditCard(id, payload) {
 }
 
 export async function deleteCreditCard(id) {
-  const res = await apiFetch(`${API_BASE}/credit-cards/${id}`, {
+  const res = await apiFetch(`${API_BASE}/cards/${id}`, {
     method: "DELETE",
   });
   return handleResponse(res);
 }
 
 export async function markCreditCardPayment(id, dueDate) {
-  const res = await apiFetch(`${API_BASE}/credit-cards/${id}/payments`, {
+  const res = await apiFetch(`${API_BASE}/cards/${id}/payments`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ due_date: dueDate }),
@@ -313,7 +313,7 @@ export async function markCreditCardPayment(id, dueDate) {
 }
 
 export async function unmarkCreditCardPayment(id, dueDate) {
-  const res = await apiFetch(`${API_BASE}/credit-cards/${id}/payments/${dueDate}`, {
+  const res = await apiFetch(`${API_BASE}/cards/${id}/payments/${dueDate}`, {
     method: "DELETE",
   });
   return handleResponse(res);
