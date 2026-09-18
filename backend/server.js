@@ -22,9 +22,10 @@ const PORT = process.env.PORT || 3001;
 
 // ---- CORS ----
 // ALLOWED_ORIGINS (separados por coma) restringe qué webs pueden llamar a
-// esta API desde el navegador. Cualquier *.vercel.app y localhost siempre
-// están permitidos (para previews de Vercel y desarrollo local); agrega ahí
-// tu dominio final cuando lo tengas fijo para cerrarlo del todo.
+// esta API desde el navegador. localhost siempre está permitido (desarrollo
+// local), y cualquier preview de Vercel de este proyecto (subdominios que
+// empiezan con "solventa-app" en *.vercel.app), pero no cualquier otro sitio
+// alojado en Vercel.
 const allowedOrigins = (process.env.ALLOWED_ORIGINS || "")
   .split(",")
   .map((o) => o.trim())
@@ -37,7 +38,10 @@ app.use(
       if (allowedOrigins.includes(origin)) return callback(null, true);
       try {
         const hostname = new URL(origin).hostname;
-        if (hostname === "localhost" || hostname.endsWith(".vercel.app")) {
+        if (
+          hostname === "localhost" ||
+          (hostname.startsWith("solventa-app") && hostname.endsWith(".vercel.app"))
+        ) {
           return callback(null, true);
         }
       } catch {
@@ -46,8 +50,8 @@ app.use(
       callback(new Error("Origen no permitido por CORS."));
     },
     // Necesario para que el navegador mande/reciba la cookie de sesión
-    // httpOnly entre el frontend (Vercel) y esta API (Render), que son
-    // dominios distintos.
+    // httpOnly entre el frontend y esta API, que viven en dominios distintos
+    // (subdominios separados de vercel.app cuentan como sitios distintos).
     credentials: true,
   })
 );
