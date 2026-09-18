@@ -2,6 +2,9 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const rateLimit = require("express-rate-limit");
+const cookieParser = require("cookie-parser");
+const bcrypt = require("bcryptjs");
+const jwt = require("jsonwebtoken");
 const db = require("./db");
 const accountsService = require("./services/accounts");
 const categoriesService = require("./services/categories");
@@ -42,9 +45,14 @@ app.use(
       }
       callback(new Error("Origen no permitido por CORS."));
     },
+    // Necesario para que el navegador mande/reciba la cookie de sesión
+    // httpOnly entre el frontend (Vercel) y esta API (Render), que son
+    // dominios distintos.
+    credentials: true,
   })
 );
 app.use(express.json());
+app.use(cookieParser());
 
 // ---- Rate limiting ----
 // Límite generoso mientras es solo tu propio uso; frena bots/escaneos
@@ -54,28 +62,79 @@ app.use("/api", rateLimit({ windowMs: 60 * 1000, max: 120 }));
 // un límite más alto evita bloquear entregas legítimas, solo frena abuso.
 app.use("/api/whatsapp/webhook", rateLimit({ windowMs: 60 * 1000, max: 60 }));
 
-// ---- Autenticación por API key ----
+// ---- Autenticación por login + cookie httpOnly ----
 // Esta API es de uso personal: sin esto, cualquiera que encuentre la URL
-// desplegada puede leer y modificar tus cuentas y transacciones. Todas las
-// rutas /api/* (menos el webhook, que Meta llama directo sin este header)
-// exigen "Authorization: Bearer <API_KEY>".
-const API_KEY = process.env.API_KEY;
-if (!API_KEY) {
+// desplegada puede leer y modificar tus cuentas y transacciones. La sesión
+// vive en una cookie httpOnly (JavaScript no puede leerla, así que un XSS
+// no puede robarla) firmada con JWT_SECRET, separada del webhook de
+// WhatsApp (que Meta llama directo, sin cookie).
+const JWT_SECRET = process.env.JWT_SECRET;
+const AUTH_PASSWORD_HASH = process.env.AUTH_PASSWORD_HASH;
+const isProd = process.env.NODE_ENV === "production";
+const SESSION_COOKIE = "solventa_session";
+
+if (!JWT_SECRET || !AUTH_PASSWORD_HASH) {
   console.warn(
-    "[Seguridad] No se definió API_KEY: la API está corriendo SIN autenticación."
+    "[Seguridad] Falta JWT_SECRET o AUTH_PASSWORD_HASH: la API está corriendo SIN autenticación."
   );
 }
 
-app.use("/api", (req, res, next) => {
-  if (req.path.startsWith("/whatsapp/webhook")) return next();
-  if (!API_KEY) return next();
+function setSessionCookie(res, token) {
+  res.cookie(SESSION_COOKIE, token, {
+    httpOnly: true,
+    secure: isProd,
+    sameSite: isProd ? "none" : "lax",
+    maxAge: 30 * 24 * 60 * 60 * 1000, // 30 días
+    path: "/",
+  });
+}
 
-  const header = req.headers.authorization || "";
-  const token = header.startsWith("Bearer ") ? header.slice(7) : null;
-  if (token !== API_KEY) {
-    return res.status(401).json({ error: "No autorizado." });
+app.post("/api/auth/login", async (req, res) => {
+  if (!JWT_SECRET || !AUTH_PASSWORD_HASH) {
+    return res.status(500).json({ error: "El login no está configurado en el servidor." });
   }
-  next();
+  const { password } = req.body || {};
+  if (typeof password !== "string" || !password) {
+    return res.status(400).json({ error: "Falta la contraseña." });
+  }
+
+  const valid = await bcrypt.compare(password, AUTH_PASSWORD_HASH);
+  if (!valid) {
+    return res.status(401).json({ error: "Contraseña incorrecta." });
+  }
+
+  const token = jwt.sign({ sub: "owner" }, JWT_SECRET, { expiresIn: "30d" });
+  setSessionCookie(res, token);
+  res.json({ ok: true });
+});
+
+app.post("/api/auth/logout", (req, res) => {
+  res.clearCookie(SESSION_COOKIE, { path: "/" });
+  res.json({ ok: true });
+});
+
+app.get("/api/auth/me", (req, res) => {
+  if (!JWT_SECRET) return res.json({ authenticated: false });
+  try {
+    jwt.verify(req.cookies?.[SESSION_COOKIE], JWT_SECRET);
+    res.json({ authenticated: true });
+  } catch {
+    res.json({ authenticated: false });
+  }
+});
+
+app.use("/api", (req, res, next) => {
+  if (req.path.startsWith("/whatsapp/webhook") || req.path.startsWith("/auth/")) {
+    return next();
+  }
+  if (!JWT_SECRET || !AUTH_PASSWORD_HASH) return next();
+
+  try {
+    jwt.verify(req.cookies?.[SESSION_COOKIE], JWT_SECRET);
+    next();
+  } catch {
+    res.status(401).json({ error: "No autorizado." });
+  }
 });
 
 function handle(fn) {

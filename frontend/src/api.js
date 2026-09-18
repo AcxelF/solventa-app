@@ -1,13 +1,35 @@
 const API_BASE =
   import.meta.env.VITE_API_URL || "http://localhost:3001/api";
-const API_KEY = import.meta.env.VITE_API_KEY;
 
-// Envuelve fetch para mandar siempre la clave de la API (si está
-// configurada) sin tener que repetirla en cada función de este archivo.
+// Envuelve fetch para mandar siempre la cookie de sesión (credentials:
+// "include") y avisar al resto de la app cuando el backend responde 401,
+// para que se muestre la pantalla de login otra vez.
 async function apiFetch(url, options = {}) {
-  const headers = { ...(options.headers || {}) };
-  if (API_KEY) headers.Authorization = `Bearer ${API_KEY}`;
-  return fetch(url, { ...options, headers });
+  const res = await fetch(url, { ...options, credentials: "include" });
+  if (res.status === 401 && !url.includes("/auth/")) {
+    window.dispatchEvent(new Event("solventa:unauthorized"));
+  }
+  return res;
+}
+
+// ---- Autenticación ----
+export async function login(password) {
+  const res = await apiFetch(`${API_BASE}/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ password }),
+  });
+  return handleResponse(res);
+}
+
+export async function logout() {
+  const res = await apiFetch(`${API_BASE}/auth/logout`, { method: "POST" });
+  return handleResponse(res);
+}
+
+export async function fetchSession() {
+  const res = await apiFetch(`${API_BASE}/auth/me`);
+  return handleResponse(res);
 }
 
 function buildQuery(params) {

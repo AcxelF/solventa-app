@@ -10,6 +10,7 @@ import {
   FileText,
   Sun,
   Moon,
+  LogOut,
 } from "lucide-react";
 import Dashboard from "./components/Dashboard.jsx";
 import AccountsView from "./components/AccountsView.jsx";
@@ -19,8 +20,9 @@ import GoalsView from "./components/GoalsView.jsx";
 import CreditCardsView from "./components/CreditCardsView.jsx";
 import TransactionsView from "./components/TransactionsView.jsx";
 import ReportView from "./components/ReportView.jsx";
+import Login from "./components/Login.jsx";
 import { useTheme } from "./context/ThemeContext.jsx";
-import { fetchAccounts, fetchCategories } from "./api.js";
+import { fetchAccounts, fetchCategories, fetchSession, logout } from "./api.js";
 
 const NAV = [
   { key: "dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -41,6 +43,7 @@ export default function App() {
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [authenticated, setAuthenticated] = useState(null);
 
   const navigate = useCallback((nextView, params = {}) => {
     setNavParams(params);
@@ -54,13 +57,43 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    fetchSession()
+      .then((session) => setAuthenticated(session.authenticated))
+      .catch(() => setAuthenticated(false));
+
+    function handleUnauthorized() {
+      setAuthenticated(false);
+    }
+    window.addEventListener("solventa:unauthorized", handleUnauthorized);
+    return () =>
+      window.removeEventListener("solventa:unauthorized", handleUnauthorized);
+  }, []);
+
+  useEffect(() => {
+    if (!authenticated) return;
     refreshMeta()
       .then(() => setLoading(false))
       .catch((err) => {
         setError(err.message);
         setLoading(false);
       });
-  }, [refreshMeta]);
+  }, [authenticated, refreshMeta]);
+
+  async function handleLogout() {
+    try {
+      await logout();
+    } finally {
+      setAuthenticated(false);
+    }
+  }
+
+  if (authenticated === null) {
+    return null;
+  }
+
+  if (!authenticated) {
+    return <Login onSuccess={() => setAuthenticated(true)} />;
+  }
 
   return (
     <div className="min-h-screen bg-bg text-text">
@@ -120,6 +153,16 @@ export default function App() {
               </button>
             ))}
           </div>
+
+          <button
+            type="button"
+            onClick={handleLogout}
+            title="Cerrar sesión"
+            aria-label="Cerrar sesión"
+            className="order-4 flex items-center gap-1.5 rounded-full border border-border p-2 text-text-secondary transition hover:text-text"
+          >
+            <LogOut size={14} />
+          </button>
         </div>
       </header>
 
