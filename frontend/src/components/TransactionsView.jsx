@@ -205,6 +205,7 @@ export default function TransactionsView({
         <TransactionList
           transactions={visibleTransactions}
           loading={loading}
+          variant="grid"
           onEdit={(transaction) => setForm({ editing: transaction })}
           onDelete={setPendingDelete}
           emptyMessage={
