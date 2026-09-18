@@ -8,7 +8,11 @@ import EmptyState from "./ui/EmptyState.jsx";
 
 const SKELETON_ROWS = 4;
 
-const GRID_COLUMNS = "36px minmax(0,1fr) 160px 130px auto auto";
+// Todas las columnas menos la de descripción tienen ancho fijo. Si el monto
+// o las acciones usaran "auto", su ancho cambiaría según el contenido de
+// CADA fila (ej. "-S/ 1.00" vs "-S/ 352.26"), y eso corriría las columnas
+// de cuenta/fecha de un lado a otro entre filas.
+const GRID_COLUMNS = "36px minmax(0,1fr) 160px 130px 104px 64px";
 
 export default function TransactionList({
   transactions,
@@ -139,18 +143,18 @@ export default function TransactionList({
             </div>
 
             <div
-              className="hidden items-center gap-3 px-4 py-3 md:grid"
+              className="hidden items-center justify-items-start gap-3 px-4 py-3 md:grid"
               style={{ gridTemplateColumns: GRID_COLUMNS }}
             >
               <IconBadge color={t.category_color} icon={Icon} size={36} />
-              <div className="min-w-0">
+              <div className="min-w-0 w-full">
                 {categoryLabel}
                 {displayDescription && (
-                  <p className="truncate text-xs text-text-muted">{displayDescription}</p>
+                  <p className="w-full truncate text-left text-xs text-text-muted">{displayDescription}</p>
                 )}
               </div>
-              <p className="truncate text-xs text-text-muted">{t.account_name}</p>
-              <p className="text-xs text-text-muted">
+              <p className="w-full truncate text-left text-xs text-text-muted">{t.account_name}</p>
+              <p className="w-full text-left text-xs text-text-muted">
                 {t.date}
                 {formatTimeShort(t.created_at) && ` · ${formatTimeShort(t.created_at)}`}
               </p>
