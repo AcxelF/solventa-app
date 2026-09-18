@@ -534,6 +534,16 @@ app.use(async (req, res, next) => {
   next();
 });
 
+// El middleware de CORS rechaza un origen llamando a next(err), lo que sin
+// esto se veía como un 500 genérico en vez de un rechazo limpio.
+app.use((err, req, res, next) => {
+  if (err && err.message === "Origen no permitido por CORS.") {
+    return res.status(403).json({ error: err.message });
+  }
+  console.error(err);
+  res.status(500).json({ error: "Error interno del servidor." });
+});
+
 if (require.main === module) {
   app.listen(PORT, () => {
     console.log(`Backend corriendo en http://localhost:${PORT}`);
