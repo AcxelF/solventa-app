@@ -100,10 +100,15 @@ if (!JWT_SECRET || !AUTH_PASSWORD_HASH) {
 }
 
 function setSessionCookie(res, token) {
+  // El frontend llama a la API a través de un proxy same-origin (vercel.json
+  // en producción, proxy de Vite en local), así que esta cookie ya no es
+  // "cross-site" desde el punto de vista del navegador: SameSite=Lax basta
+  // y evita el bloqueo de cookies cross-site que aplican Safari y, cada vez
+  // más, otros navegadores.
   res.cookie(SESSION_COOKIE, token, {
     httpOnly: true,
     secure: isProd,
-    sameSite: isProd ? "none" : "lax",
+    sameSite: "lax",
     maxAge: 30 * 24 * 60 * 60 * 1000, // 30 días
     path: "/",
   });

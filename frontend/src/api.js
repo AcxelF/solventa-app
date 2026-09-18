@@ -1,5 +1,9 @@
-const API_BASE =
-  import.meta.env.VITE_API_URL || "http://localhost:3001/api";
+// Ruta relativa: en local, el proxy de Vite (vite.config.js) reenvía /api al
+// backend en :3001; en producción, vercel.json reescribe /api hacia el
+// backend desplegado. Así el navegador ve la API como del mismo origen que
+// el frontend y la cookie de sesión deja de ser "cross-site" (Safari y,
+// cada vez más, otros navegadores bloquean cookies cross-site por defecto).
+const API_BASE = import.meta.env.VITE_API_URL || "/api";
 
 // Envuelve fetch para mandar siempre la cookie de sesión (credentials:
 // "include") y avisar al resto de la app cuando el backend responde 401,
