@@ -58,6 +58,17 @@ export function formatDateShort(iso) {
   return `${Number(day)} ${MONTHS_SHORT[Number(monthIndex) - 1]} ${year}`;
 }
 
+// `created_at` viene de SQLite como "YYYY-MM-DD HH:mm:ss" en UTC, sin
+// indicarlo explícitamente. Si se le pasa tal cual a `new Date(...)`, el
+// navegador lo interpreta como hora local (no UTC) y muestra la hora
+// equivocada — por eso se marca "Z" a mano antes de convertir.
+export function formatTimeShort(createdAt) {
+  if (!createdAt) return "";
+  const date = new Date(`${createdAt.replace(" ", "T")}Z`);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleTimeString("es-PE", { hour: "numeric", minute: "2-digit" });
+}
+
 export function daysUntil(iso) {
   const target = new Date(`${iso}T00:00:00`);
   const now = new Date();

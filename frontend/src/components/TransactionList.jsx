@@ -1,6 +1,7 @@
 import { Pencil, Trash2 } from "lucide-react";
 import Skeleton, { SkeletonTheme } from "react-loading-skeleton";
 import { categoryIcon } from "../lib/categoryIcons.js";
+import { formatTimeShort } from "../lib/dates.js";
 import { formatMoney } from "../utils/format.js";
 import IconBadge from "./ui/IconBadge.jsx";
 import EmptyState from "./ui/EmptyState.jsx";
@@ -64,7 +65,9 @@ export default function TransactionList({
               </p>
               <p className="break-words text-xs text-text-muted">
                 {displayDescription ? `${displayDescription} · ` : ""}
-                {t.date} · {t.account_name}
+                {t.date}
+                {formatTimeShort(t.created_at) && ` · ${formatTimeShort(t.created_at)}`} ·{" "}
+                {t.account_name}
               </p>
             </div>
 

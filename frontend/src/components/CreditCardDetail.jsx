@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Trash2, Pencil, Check, Undo2 } from "lucide-react";
 import { formatMoney } from "../utils/format.js";
 import { readableOn } from "../utils/color.js";
-import { formatDateShort } from "../lib/dates.js";
+import { formatDateShort, formatTimeShort } from "../lib/dates.js";
 import { markCreditCardPayment, unmarkCreditCardPayment } from "../api.js";
 import Button from "./ui/Button.jsx";
 
@@ -203,6 +203,11 @@ export default function CreditCardDetail({
                 <div className="min-w-0 flex-1">
                   <p className="flex items-center gap-1.5 text-xs text-text-secondary">
                     {formatDateShort(transaction.date)}
+                    {formatTimeShort(transaction.created_at) && (
+                      <span className="text-text-muted">
+                        · {formatTimeShort(transaction.created_at)}
+                      </span>
+                    )}
                     {transaction.total_installments && (
                       <span className="rounded-full bg-surface-2 px-1.5 py-0.5 text-[10px] font-semibold text-text-muted">
                         Cuota {transaction.installment_number}/{transaction.total_installments}
