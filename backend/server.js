@@ -5,6 +5,7 @@ const rateLimit = require("express-rate-limit");
 const cookieParser = require("cookie-parser");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const crypto = require("crypto");
 const db = require("./db");
 const accountsService = require("./services/accounts");
 const categoriesService = require("./services/categories");
@@ -21,11 +22,13 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 // ---- CORS ----
-// ALLOWED_ORIGINS (separados por coma) restringe qué webs pueden llamar a
-// esta API desde el navegador. localhost siempre está permitido (desarrollo
-// local), y cualquier preview de Vercel de este proyecto (subdominios que
-// empiezan con "solventa-app" en *.vercel.app), pero no cualquier otro sitio
-// alojado en Vercel.
+// ALLOWED_ORIGINS (separados por coma) es una lista EXACTA de orígenes
+// autorizados a llamar a esta API desde el navegador, además de localhost
+// (desarrollo local). No se usa ningún patrón tipo "*.vercel.app": cualquiera
+// puede crear gratis un proyecto de Vercel cuyo nombre empiece igual (ej.
+// "solventa-app-evil.vercel.app"), así que un prefijo/sufijo no es un
+// allowlist seguro cuando la cookie de sesión viaja con credentials:true.
+// Agrega aquí tu dominio de producción y cualquier preview que necesites.
 const allowedOrigins = (process.env.ALLOWED_ORIGINS || "")
   .split(",")
   .map((o) => o.trim())
@@ -37,13 +40,7 @@ app.use(
       if (!origin) return callback(null, true); // llamadas server-to-server (ej. Meta) no mandan Origin
       if (allowedOrigins.includes(origin)) return callback(null, true);
       try {
-        const hostname = new URL(origin).hostname;
-        if (
-          hostname === "localhost" ||
-          (hostname.startsWith("solventa-app") && hostname.endsWith(".vercel.app"))
-        ) {
-          return callback(null, true);
-        }
+        if (new URL(origin).hostname === "localhost") return callback(null, true);
       } catch {
         // origin no es una URL válida, cae al rechazo de abajo
       }
@@ -55,7 +52,15 @@ app.use(
     credentials: true,
   })
 );
-app.use(express.json());
+// Guarda el body crudo (antes de parsear JSON) para poder verificar la
+// firma X-Hub-Signature-256 de Meta en el webhook de WhatsApp.
+app.use(
+  express.json({
+    verify: (req, res, buf) => {
+      req.rawBody = buf;
+    },
+  })
+);
 app.use(cookieParser());
 
 // ---- Rate limiting ----
@@ -406,7 +411,42 @@ async function handleParsedTransaction(fromNumber, parsed, fallbackDescription) 
 // tus cuentas). Sin configurar, no bloquea nada (compatibilidad).
 const WHATSAPP_OWNER_NUMBER = process.env.WHATSAPP_OWNER_NUMBER;
 
+// Meta firma cada POST con X-Hub-Signature-256 (HMAC-SHA256 del body crudo
+// usando el App Secret). Sin esto, el filtro de WHATSAPP_OWNER_NUMBER de
+// arriba no sirve de mucho: cualquiera puede fabricar un POST con
+// "from": "<tu número>" y hacerse pasar por Meta.
+const META_APP_SECRET = process.env.META_APP_SECRET;
+if (!META_APP_SECRET) {
+  console.warn(
+    "[Seguridad] Falta META_APP_SECRET: el webhook de WhatsApp no verifica que los mensajes vengan realmente de Meta."
+  );
+}
+
+function isValidMetaSignature(req) {
+  if (!META_APP_SECRET) return true; // sin configurar, no bloquea (compatibilidad)
+  const signature = req.headers["x-hub-signature-256"];
+  if (typeof signature !== "string" || !signature.startsWith("sha256=") || !req.rawBody) {
+    return false;
+  }
+  const expected = crypto
+    .createHmac("sha256", META_APP_SECRET)
+    .update(req.rawBody)
+    .digest("hex");
+  const provided = signature.slice("sha256=".length);
+  const expectedBuf = Buffer.from(expected, "hex");
+  const providedBuf = Buffer.from(provided, "hex");
+  return (
+    expectedBuf.length === providedBuf.length &&
+    crypto.timingSafeEqual(expectedBuf, providedBuf)
+  );
+}
+
 app.post("/api/whatsapp/webhook", handle(async (req, res) => {
+  if (!isValidMetaSignature(req)) {
+    console.warn("[WhatsApp Webhook] Firma inválida, mensaje rechazado.");
+    return res.sendStatus(401);
+  }
+
   const body = req.body;
 
   if (body.object === "whatsapp_business_account") {
