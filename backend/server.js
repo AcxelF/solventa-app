@@ -1,6 +1,7 @@
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
+const rateLimit = require("express-rate-limit");
 const db = require("./db");
 const accountsService = require("./services/accounts");
 const categoriesService = require("./services/categories");
@@ -17,21 +18,65 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 // ---- CORS ----
-// Mientras no tengas tu dominio de Vercel asignado, CORS permite cualquier
-// origen (esto incluye cualquier dominio *.vercel.app), así que el frontend
-// desplegado en Vercel podrá llamar a la API sin configuración extra.
-//
-// Cuando Vercel te asigne tu dominio exacto, reemplaza el bloque de abajo por:
-//
-//   const allowedOrigins = [
-//     "http://localhost:5173",                    // desarrollo local
-//     "https://tu-app.vercel.app",                // ← PEGA TU DOMINIO DE VERCEL AQUÍ
-//   ];
-//   app.use(cors({ origin: allowedOrigins }));
-//
-// (Sin esa restricción, la API acepta peticiones de cualquier dominio.)
-app.use(cors());
+// ALLOWED_ORIGINS (separados por coma) restringe qué webs pueden llamar a
+// esta API desde el navegador. Cualquier *.vercel.app y localhost siempre
+// están permitidos (para previews de Vercel y desarrollo local); agrega ahí
+// tu dominio final cuando lo tengas fijo para cerrarlo del todo.
+const allowedOrigins = (process.env.ALLOWED_ORIGINS || "")
+  .split(",")
+  .map((o) => o.trim())
+  .filter(Boolean);
+
+app.use(
+  cors({
+    origin(origin, callback) {
+      if (!origin) return callback(null, true); // llamadas server-to-server (ej. Meta) no mandan Origin
+      if (allowedOrigins.includes(origin)) return callback(null, true);
+      try {
+        const hostname = new URL(origin).hostname;
+        if (hostname === "localhost" || hostname.endsWith(".vercel.app")) {
+          return callback(null, true);
+        }
+      } catch {
+        // origin no es una URL válida, cae al rechazo de abajo
+      }
+      callback(new Error("Origen no permitido por CORS."));
+    },
+  })
+);
 app.use(express.json());
+
+// ---- Rate limiting ----
+// Límite generoso mientras es solo tu propio uso; frena bots/escaneos
+// automáticos si alguien encuentra la URL de la API.
+app.use("/api", rateLimit({ windowMs: 60 * 1000, max: 120 }));
+// El webhook de WhatsApp lo llama Meta con su propio patrón de reintentos;
+// un límite más alto evita bloquear entregas legítimas, solo frena abuso.
+app.use("/api/whatsapp/webhook", rateLimit({ windowMs: 60 * 1000, max: 60 }));
+
+// ---- Autenticación por API key ----
+// Esta API es de uso personal: sin esto, cualquiera que encuentre la URL
+// desplegada puede leer y modificar tus cuentas y transacciones. Todas las
+// rutas /api/* (menos el webhook, que Meta llama directo sin este header)
+// exigen "Authorization: Bearer <API_KEY>".
+const API_KEY = process.env.API_KEY;
+if (!API_KEY) {
+  console.warn(
+    "[Seguridad] No se definió API_KEY: la API está corriendo SIN autenticación."
+  );
+}
+
+app.use("/api", (req, res, next) => {
+  if (req.path.startsWith("/whatsapp/webhook")) return next();
+  if (!API_KEY) return next();
+
+  const header = req.headers.authorization || "";
+  const token = header.startsWith("Bearer ") ? header.slice(7) : null;
+  if (token !== API_KEY) {
+    return res.status(401).json({ error: "No autorizado." });
+  }
+  next();
+});
 
 function handle(fn) {
   return async (req, res) => {
@@ -282,6 +327,11 @@ async function handleParsedTransaction(fromNumber, parsed, fallbackDescription) 
   await whatsappService.sendWhatsAppMessage(fromNumber, replyMsg);
 }
 
+// Si defines WHATSAPP_OWNER_NUMBER, solo los mensajes de ese número se
+// procesan (evita que cualquiera que te escriba al bot registre gastos en
+// tus cuentas). Sin configurar, no bloquea nada (compatibilidad).
+const WHATSAPP_OWNER_NUMBER = process.env.WHATSAPP_OWNER_NUMBER;
+
 app.post("/api/whatsapp/webhook", handle(async (req, res) => {
   const body = req.body;
 
@@ -290,6 +340,11 @@ app.post("/api/whatsapp/webhook", handle(async (req, res) => {
     const changes = entry?.changes?.[0];
     const value = changes?.value;
     const message = value?.messages?.[0];
+
+    if (message && WHATSAPP_OWNER_NUMBER && message.from !== WHATSAPP_OWNER_NUMBER) {
+      console.warn(`[WhatsApp Webhook] Mensaje ignorado de número no autorizado: ${message.from}`);
+      return res.status(200).send("EVENT_RECEIVED");
+    }
 
     if (message && message.type === "text") {
       const fromNumber = message.from;

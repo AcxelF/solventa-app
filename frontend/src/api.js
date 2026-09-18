@@ -1,5 +1,14 @@
 const API_BASE =
   import.meta.env.VITE_API_URL || "http://localhost:3001/api";
+const API_KEY = import.meta.env.VITE_API_KEY;
+
+// Envuelve fetch para mandar siempre la clave de la API (si está
+// configurada) sin tener que repetirla en cada función de este archivo.
+async function apiFetch(url, options = {}) {
+  const headers = { ...(options.headers || {}) };
+  if (API_KEY) headers.Authorization = `Bearer ${API_KEY}`;
+  return fetch(url, { ...options, headers });
+}
 
 function buildQuery(params) {
   const entries = Object.entries(params).filter(
@@ -32,12 +41,12 @@ async function handleResponse(res) {
 
 // ---- Cuentas ----
 export async function fetchAccounts() {
-  const res = await fetch(`${API_BASE}/accounts`);
+  const res = await apiFetch(`${API_BASE}/accounts`);
   return handleResponse(res);
 }
 
 export async function createAccount(payload) {
-  const res = await fetch(`${API_BASE}/accounts`, {
+  const res = await apiFetch(`${API_BASE}/accounts`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -46,7 +55,7 @@ export async function createAccount(payload) {
 }
 
 export async function updateAccount(id, payload) {
-  const res = await fetch(`${API_BASE}/accounts/${id}`, {
+  const res = await apiFetch(`${API_BASE}/accounts/${id}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -55,7 +64,7 @@ export async function updateAccount(id, payload) {
 }
 
 export async function deleteAccount(id) {
-  const res = await fetch(`${API_BASE}/accounts/${id}`, {
+  const res = await apiFetch(`${API_BASE}/accounts/${id}`, {
     method: "DELETE",
   });
   return handleResponse(res);
@@ -63,12 +72,12 @@ export async function deleteAccount(id) {
 
 // ---- Categorías ----
 export async function fetchCategories({ type } = {}) {
-  const res = await fetch(`${API_BASE}/categories${buildQuery({ type })}`);
+  const res = await apiFetch(`${API_BASE}/categories${buildQuery({ type })}`);
   return handleResponse(res);
 }
 
 export async function createCategory(payload) {
-  const res = await fetch(`${API_BASE}/categories`, {
+  const res = await apiFetch(`${API_BASE}/categories`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -77,7 +86,7 @@ export async function createCategory(payload) {
 }
 
 export async function updateCategory(id, payload) {
-  const res = await fetch(`${API_BASE}/categories/${id}`, {
+  const res = await apiFetch(`${API_BASE}/categories/${id}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -86,7 +95,7 @@ export async function updateCategory(id, payload) {
 }
 
 export async function deleteCategory(id) {
-  const res = await fetch(`${API_BASE}/categories/${id}`, {
+  const res = await apiFetch(`${API_BASE}/categories/${id}`, {
     method: "DELETE",
   });
   return handleResponse(res);
@@ -94,12 +103,12 @@ export async function deleteCategory(id) {
 
 // ---- Transacciones ----
 export async function fetchTransactions(filters = {}) {
-  const res = await fetch(`${API_BASE}/transactions${buildQuery(filters)}`);
+  const res = await apiFetch(`${API_BASE}/transactions${buildQuery(filters)}`);
   return handleResponse(res);
 }
 
 export async function createTransaction(payload) {
-  const res = await fetch(`${API_BASE}/transactions`, {
+  const res = await apiFetch(`${API_BASE}/transactions`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -108,7 +117,7 @@ export async function createTransaction(payload) {
 }
 
 export async function createInstallmentPurchase(payload) {
-  const res = await fetch(`${API_BASE}/transactions/installments`, {
+  const res = await apiFetch(`${API_BASE}/transactions/installments`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -117,7 +126,7 @@ export async function createInstallmentPurchase(payload) {
 }
 
 export async function updateTransaction(id, payload) {
-  const res = await fetch(`${API_BASE}/transactions/${id}`, {
+  const res = await apiFetch(`${API_BASE}/transactions/${id}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -126,7 +135,7 @@ export async function updateTransaction(id, payload) {
 }
 
 export async function deleteTransaction(id) {
-  const res = await fetch(`${API_BASE}/transactions/${id}`, {
+  const res = await apiFetch(`${API_BASE}/transactions/${id}`, {
     method: "DELETE",
   });
   return handleResponse(res);
@@ -134,7 +143,7 @@ export async function deleteTransaction(id) {
 
 // ---- Resumen ----
 export async function fetchSummary({ month, account_id } = {}) {
-  const res = await fetch(
+  const res = await apiFetch(
     `${API_BASE}/summary${buildQuery({ month, account_id })}`
   );
   return handleResponse(res);
@@ -142,7 +151,7 @@ export async function fetchSummary({ month, account_id } = {}) {
 
 // ---- Widgets del dashboard ----
 export async function fetchDashboardWidgets({ month } = {}) {
-  const res = await fetch(
+  const res = await apiFetch(
     `${API_BASE}/dashboard/widgets${buildQuery({ month })}`
   );
   return handleResponse(res);
@@ -150,12 +159,12 @@ export async function fetchDashboardWidgets({ month } = {}) {
 
 // ---- Presupuestos ----
 export async function fetchBudgets({ month } = {}) {
-  const res = await fetch(`${API_BASE}/budgets${buildQuery({ month })}`);
+  const res = await apiFetch(`${API_BASE}/budgets${buildQuery({ month })}`);
   return handleResponse(res);
 }
 
 export async function createBudget(payload) {
-  const res = await fetch(`${API_BASE}/budgets`, {
+  const res = await apiFetch(`${API_BASE}/budgets`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -164,7 +173,7 @@ export async function createBudget(payload) {
 }
 
 export async function updateBudget(id, payload) {
-  const res = await fetch(`${API_BASE}/budgets/${id}`, {
+  const res = await apiFetch(`${API_BASE}/budgets/${id}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -173,7 +182,7 @@ export async function updateBudget(id, payload) {
 }
 
 export async function deleteBudget(id) {
-  const res = await fetch(`${API_BASE}/budgets/${id}`, {
+  const res = await apiFetch(`${API_BASE}/budgets/${id}`, {
     method: "DELETE",
   });
   return handleResponse(res);
@@ -181,17 +190,17 @@ export async function deleteBudget(id) {
 
 // ---- Metas de ahorro ----
 export async function fetchGoals() {
-  const res = await fetch(`${API_BASE}/goals`);
+  const res = await apiFetch(`${API_BASE}/goals`);
   return handleResponse(res);
 }
 
 export async function fetchGoal(id) {
-  const res = await fetch(`${API_BASE}/goals/${id}`);
+  const res = await apiFetch(`${API_BASE}/goals/${id}`);
   return handleResponse(res);
 }
 
 export async function createGoal(payload) {
-  const res = await fetch(`${API_BASE}/goals`, {
+  const res = await apiFetch(`${API_BASE}/goals`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -200,7 +209,7 @@ export async function createGoal(payload) {
 }
 
 export async function updateGoal(id, payload) {
-  const res = await fetch(`${API_BASE}/goals/${id}`, {
+  const res = await apiFetch(`${API_BASE}/goals/${id}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -209,19 +218,19 @@ export async function updateGoal(id, payload) {
 }
 
 export async function deleteGoal(id) {
-  const res = await fetch(`${API_BASE}/goals/${id}`, {
+  const res = await apiFetch(`${API_BASE}/goals/${id}`, {
     method: "DELETE",
   });
   return handleResponse(res);
 }
 
 export async function fetchContributions(goalId) {
-  const res = await fetch(`${API_BASE}/goals/${goalId}/contributions`);
+  const res = await apiFetch(`${API_BASE}/goals/${goalId}/contributions`);
   return handleResponse(res);
 }
 
 export async function addContribution(goalId, payload) {
-  const res = await fetch(`${API_BASE}/goals/${goalId}/contributions`, {
+  const res = await apiFetch(`${API_BASE}/goals/${goalId}/contributions`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -230,7 +239,7 @@ export async function addContribution(goalId, payload) {
 }
 
 export async function deleteContribution(id) {
-  const res = await fetch(`${API_BASE}/contributions/${id}`, {
+  const res = await apiFetch(`${API_BASE}/contributions/${id}`, {
     method: "DELETE",
   });
   return handleResponse(res);
@@ -238,17 +247,17 @@ export async function deleteContribution(id) {
 
 // ---- Tarjetas de crédito ----
 export async function fetchCreditCards() {
-  const res = await fetch(`${API_BASE}/credit-cards`);
+  const res = await apiFetch(`${API_BASE}/credit-cards`);
   return handleResponse(res);
 }
 
 export async function fetchCreditCard(id) {
-  const res = await fetch(`${API_BASE}/credit-cards/${id}`);
+  const res = await apiFetch(`${API_BASE}/credit-cards/${id}`);
   return handleResponse(res);
 }
 
 export async function createCreditCard(payload) {
-  const res = await fetch(`${API_BASE}/credit-cards`, {
+  const res = await apiFetch(`${API_BASE}/credit-cards`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -257,7 +266,7 @@ export async function createCreditCard(payload) {
 }
 
 export async function updateCreditCard(id, payload) {
-  const res = await fetch(`${API_BASE}/credit-cards/${id}`, {
+  const res = await apiFetch(`${API_BASE}/credit-cards/${id}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -266,14 +275,14 @@ export async function updateCreditCard(id, payload) {
 }
 
 export async function deleteCreditCard(id) {
-  const res = await fetch(`${API_BASE}/credit-cards/${id}`, {
+  const res = await apiFetch(`${API_BASE}/credit-cards/${id}`, {
     method: "DELETE",
   });
   return handleResponse(res);
 }
 
 export async function markCreditCardPayment(id, dueDate) {
-  const res = await fetch(`${API_BASE}/credit-cards/${id}/payments`, {
+  const res = await apiFetch(`${API_BASE}/credit-cards/${id}/payments`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ due_date: dueDate }),
@@ -282,7 +291,7 @@ export async function markCreditCardPayment(id, dueDate) {
 }
 
 export async function unmarkCreditCardPayment(id, dueDate) {
-  const res = await fetch(`${API_BASE}/credit-cards/${id}/payments/${dueDate}`, {
+  const res = await apiFetch(`${API_BASE}/credit-cards/${id}/payments/${dueDate}`, {
     method: "DELETE",
   });
   return handleResponse(res);
