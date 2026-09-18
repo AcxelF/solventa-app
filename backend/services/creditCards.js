@@ -53,14 +53,15 @@ async function sumSpending(accountId, fromISO, toISO, { fromInclusive = true, to
   return row.total;
 }
 
-async function getConsumedUnpaid(accountId) {
-  // "Consumido y no pagado" = gastos - pagos registrados en la tarjeta.
+async function getConsumedUnpaid(card) {
+  // "Consumido y no pagado" = deuda inicial (previa a registrar en Solventa)
+  // + gastos - pagos registrados en la tarjeta desde entonces.
   const row = await db.get(
     `SELECT COALESCE(SUM(CASE WHEN type = 'gasto' THEN amount ELSE -amount END), 0) AS total
      FROM transactions WHERE account_id = ?`,
-    [accountId]
+    [card.id]
   );
-  return Math.max(0, row.total);
+  return Math.max(0, row.total + (card.initial_balance || 0));
 }
 
 // Pagos de la línea de tiempo: independientes del ciclo de corte.
@@ -128,7 +129,7 @@ async function computeCycle(card) {
   );
 
   // Crédito disponible: línea de crédito menos lo consumido y no pagado.
-  const consumedUnpaid = await getConsumedUnpaid(card.id);
+  const consumedUnpaid = await getConsumedUnpaid(card);
   const availableCredit = Math.max(0, card.credit_limit - consumedUnpaid);
 
   const nextPaymentISO = toISO(nextPayment);
