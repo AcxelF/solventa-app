@@ -1,7 +1,9 @@
-import { Trash2, Pencil } from "lucide-react";
+import { useState } from "react";
+import { Trash2, Pencil, Check, Undo2 } from "lucide-react";
 import { formatMoney } from "../utils/format.js";
 import { readableOn } from "../utils/color.js";
 import { formatDateShort } from "../lib/dates.js";
+import { markCreditCardPayment, unmarkCreditCardPayment } from "../api.js";
 import Button from "./ui/Button.jsx";
 
 function useCreditPercent(card) {
@@ -17,10 +19,26 @@ export default function CreditCardDetail({
   loading,
   onEdit,
   onDelete,
+  onPaymentChange,
 }) {
   const { cycle } = card;
   const textColor = readableOn(card.color);
   const usedPercent = useCreditPercent(card);
+  const [togglingPayment, setTogglingPayment] = useState(false);
+
+  async function handleTogglePayment() {
+    setTogglingPayment(true);
+    try {
+      if (cycle.next_payment_paid) {
+        await unmarkCreditCardPayment(card.id, cycle.next_payment);
+      } else {
+        await markCreditCardPayment(card.id, cycle.next_payment);
+      }
+      await onPaymentChange?.();
+    } finally {
+      setTogglingPayment(false);
+    }
+  }
 
   const timeline = [
     { key: "last_cut", label: "Corte anterior", date: cycle.last_cut, kind: "cut" },
@@ -80,20 +98,60 @@ export default function CreditCardDetail({
         </div>
       </div>
 
-      <div className="rounded-xl border border-positive/30 bg-positive/10 px-4 py-3">
-        <p className="text-xs font-medium uppercase tracking-wider text-positive">
-          Monto a pagar
-        </p>
-        <p className="mt-1 font-mono text-2xl font-semibold text-positive">
-          {formatMoney(cycle.amount_due)}
-        </p>
-        <p className="mt-1 text-xs text-positive">
-          Vence el {formatDateShort(cycle.next_payment)} ·{" "}
-          {cycle.days_to_next_payment} día
-          {cycle.days_to_next_payment === 1 ? "" : "s"} restante
-          {cycle.days_to_next_payment === 1 ? "" : "s"}
-        </p>
+      <div
+        className={`rounded-xl border px-4 py-3 ${
+          cycle.next_payment_paid
+            ? "border-border bg-surface-2"
+            : "border-positive/30 bg-positive/10"
+        }`}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p
+              className={`text-xs font-medium uppercase tracking-wider ${
+                cycle.next_payment_paid ? "text-text-muted" : "text-positive"
+              }`}
+            >
+              Monto a pagar
+            </p>
+            <p
+              className={`mt-1 font-mono text-2xl font-semibold ${
+                cycle.next_payment_paid ? "text-text-muted line-through" : "text-positive"
+              }`}
+            >
+              {formatMoney(cycle.amount_due)}
+            </p>
+            <p
+              className={`mt-1 text-xs ${
+                cycle.next_payment_paid ? "text-text-muted" : "text-positive"
+              }`}
+            >
+              {cycle.next_payment_paid
+                ? `Pagado · vencía el ${formatDateShort(cycle.next_payment)}`
+                : `Vence el ${formatDateShort(cycle.next_payment)} · ${
+                    cycle.days_to_next_payment
+                  } día${cycle.days_to_next_payment === 1 ? "" : "s"} restante${
+                    cycle.days_to_next_payment === 1 ? "" : "s"
+                  }`}
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant={cycle.next_payment_paid ? "subtle" : "primary"}
+            onClick={handleTogglePayment}
+            disabled={togglingPayment}
+          >
+            {cycle.next_payment_paid ? <Undo2 size={14} /> : <Check size={14} />}
+            {cycle.next_payment_paid ? "Deshacer" : "Marcar pagado"}
+          </Button>
+        </div>
       </div>
+
+      {card.interest_rate != null && (
+        <p className="text-xs text-text-muted">
+          Tasa de interés (TEA): <span className="font-mono font-medium text-text">{card.interest_rate}%</span>
+        </p>
+      )}
 
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="rounded-xl border border-border bg-surface-2 px-4 py-3">

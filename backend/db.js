@@ -58,6 +58,7 @@ const SCHEMA = `
     cut_day INTEGER,
     payment_day INTEGER,
     initial_balance REAL NOT NULL DEFAULT 0,
+    interest_rate REAL,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
 
@@ -110,6 +111,14 @@ const SCHEMA = `
     note TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
+
+  CREATE TABLE IF NOT EXISTS credit_card_payments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    card_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    due_date TEXT NOT NULL,
+    paid_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE (card_id, due_date)
+  );
 `;
 
 // Crea las tablas (y aplica migraciones de columnas) si no existen.
@@ -137,6 +146,7 @@ async function migrate() {
     ["cut_day", "INTEGER"],
     ["payment_day", "INTEGER"],
     ["initial_balance", "REAL NOT NULL DEFAULT 0"],
+    ["interest_rate", "REAL"],
   ];
 
   for (const [name, type] of additions) {

@@ -122,13 +122,20 @@ async function computeCycle(card) {
   const consumedUnpaid = await getConsumedUnpaid(card.id);
   const availableCredit = Math.max(0, card.credit_limit - consumedUnpaid);
 
+  const nextPaymentISO = toISO(nextPayment);
+  const paymentRow = await db.get(
+    "SELECT 1 FROM credit_card_payments WHERE card_id = ? AND due_date = ?",
+    [card.id, nextPaymentISO]
+  );
+
   return {
     today: todayISO,
     prev_cut: prevCutISO,
     last_cut: lastCutISO,
     next_cut: toISO(nextCut),
     prev_payment: toISO(prevPayment),
-    next_payment: toISO(nextPayment),
+    next_payment: nextPaymentISO,
+    next_payment_paid: Boolean(paymentRow),
     days_to_next_payment: daysToNextPayment,
     current_consumption: currentConsumption,
     amount_due: amountDue,
@@ -148,6 +155,7 @@ function validateCard({
   cut_day,
   payment_day,
   color,
+  interest_rate,
 }) {
   if (!name || typeof name !== "string" || name.trim() === "") {
     throw new ValidationError("El alias de la tarjeta es obligatorio.");
@@ -178,6 +186,13 @@ function validateCard({
   if (!color || typeof color !== "string" || !HEX_COLOR.test(color)) {
     throw new ValidationError("El color debe ser un hex válido (ej: #1A1F71).");
   }
+  if (
+    interest_rate !== undefined &&
+    interest_rate !== null &&
+    (typeof interest_rate !== "number" || !Number.isFinite(interest_rate) || interest_rate < 0)
+  ) {
+    throw new ValidationError("La tasa de interés (TEA) debe ser un número mayor o igual a 0.");
+  }
 }
 
 async function listCreditCards() {
@@ -196,8 +211,8 @@ async function createCreditCard(fields = {}) {
 
   const result = await db.run(
     `INSERT INTO accounts
-       (name, type, color, brand, last_four, credit_limit, cut_day, payment_day)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+       (name, type, color, brand, last_four, credit_limit, cut_day, payment_day, interest_rate)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       fields.name.trim(),
       CARD_TYPE,
@@ -207,6 +222,7 @@ async function createCreditCard(fields = {}) {
       fields.credit_limit,
       fields.cut_day,
       fields.payment_day,
+      fields.interest_rate ?? null,
     ]
   );
 
@@ -222,7 +238,7 @@ async function updateCreditCard(id, fields = {}) {
 
   await db.run(
     `UPDATE accounts
-     SET name = ?, color = ?, brand = ?, last_four = ?, credit_limit = ?, cut_day = ?, payment_day = ?
+     SET name = ?, color = ?, brand = ?, last_four = ?, credit_limit = ?, cut_day = ?, payment_day = ?, interest_rate = ?
      WHERE id = ?`,
     [
       next.name.trim(),
@@ -232,6 +248,7 @@ async function updateCreditCard(id, fields = {}) {
       next.credit_limit,
       next.cut_day,
       next.payment_day,
+      next.interest_rate ?? null,
       id,
     ]
   );
@@ -261,10 +278,41 @@ async function getCreditCard(id) {
   return withCycle(await getCard(id));
 }
 
+async function markPaymentPaid(cardId, dueDate) {
+  const card = await getCard(cardId);
+  if (!card) return null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(dueDate || ""))) {
+    throw new ValidationError("La fecha de pago no es válida.");
+  }
+
+  await db.run(
+    `INSERT INTO credit_card_payments (card_id, due_date)
+     VALUES (?, ?)
+     ON CONFLICT (card_id, due_date) DO NOTHING`,
+    [cardId, dueDate]
+  );
+
+  return withCycle(card);
+}
+
+async function unmarkPaymentPaid(cardId, dueDate) {
+  const card = await getCard(cardId);
+  if (!card) return null;
+
+  await db.run(
+    "DELETE FROM credit_card_payments WHERE card_id = ? AND due_date = ?",
+    [cardId, dueDate]
+  );
+
+  return withCycle(card);
+}
+
 module.exports = {
   listCreditCards,
   createCreditCard,
   updateCreditCard,
   deleteCreditCard,
   getCreditCard,
+  markPaymentPaid,
+  unmarkPaymentPaid,
 };

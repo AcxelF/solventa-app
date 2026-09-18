@@ -271,3 +271,19 @@ export async function deleteCreditCard(id) {
   });
   return handleResponse(res);
 }
+
+export async function markCreditCardPayment(id, dueDate) {
+  const res = await fetch(`${API_BASE}/credit-cards/${id}/payments`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ due_date: dueDate }),
+  });
+  return handleResponse(res);
+}
+
+export async function unmarkCreditCardPayment(id, dueDate) {
+  const res = await fetch(`${API_BASE}/credit-cards/${id}/payments/${dueDate}`, {
+    method: "DELETE",
+  });
+  return handleResponse(res);
+}

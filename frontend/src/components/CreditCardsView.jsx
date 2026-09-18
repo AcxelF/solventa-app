@@ -224,6 +224,10 @@ export default function CreditCardsView() {
               setForm({ editing: detail });
             }}
             onDelete={() => setPendingDelete(detail)}
+            onPaymentChange={async () => {
+              await refreshDetail();
+              await load();
+            }}
           />
         </Modal>
       )}

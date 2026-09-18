@@ -208,6 +208,18 @@ app.delete("/api/credit-cards/:id", handle(async (req, res) => {
   res.status(204).send();
 }));
 
+app.post("/api/credit-cards/:id/payments", handle(async (req, res) => {
+  const card = await creditCardsService.markPaymentPaid(Number(req.params.id), req.body.due_date);
+  if (!card) return res.status(404).json({ error: "Tarjeta no encontrada." });
+  res.status(201).json(card);
+}));
+
+app.delete("/api/credit-cards/:id/payments/:dueDate", handle(async (req, res) => {
+  const card = await creditCardsService.unmarkPaymentPaid(Number(req.params.id), req.params.dueDate);
+  if (!card) return res.status(404).json({ error: "Tarjeta no encontrada." });
+  res.json(card);
+}));
+
 // ---- Resumen ----
 app.get("/api/summary", handle(async (req, res) => {
   res.json(

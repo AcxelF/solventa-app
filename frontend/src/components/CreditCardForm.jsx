@@ -16,6 +16,9 @@ export default function CreditCardForm({ initial, onSubmit, onCancel }) {
   const [paymentDay, setPaymentDay] = useState(
     initial ? String(initial.payment_day) : ""
   );
+  const [interestRate, setInterestRate] = useState(
+    initial?.interest_rate != null ? String(initial.interest_rate) : ""
+  );
   const [color, setColor] = useState(initial?.color ?? BRAND_COLORS[brand]);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -52,6 +55,11 @@ export default function CreditCardForm({ initial, onSubmit, onCancel }) {
       setError("El día de pago debe ser un número entre 1 y 31.");
       return;
     }
+    const rate = interestRate.trim() === "" ? null : Number(interestRate);
+    if (rate !== null && (!Number.isFinite(rate) || rate < 0)) {
+      setError("La tasa de interés (TEA) debe ser un número mayor o igual a 0.");
+      return;
+    }
 
     setSaving(true);
     try {
@@ -62,6 +70,7 @@ export default function CreditCardForm({ initial, onSubmit, onCancel }) {
         credit_limit: limit,
         cut_day: cut,
         payment_day: payment,
+        interest_rate: rate,
         color,
       });
     } catch (err) {
@@ -136,6 +145,21 @@ export default function CreditCardForm({ initial, onSubmit, onCancel }) {
           />
         </Field>
       </div>
+
+      <Field
+        label="Tasa de interés TEA % (opcional)"
+        hint="La que aplica el banco a tus compras en cuotas o revolventes. Aparece en tu estado de cuenta."
+      >
+        <TextInput
+          type="number"
+          step="0.01"
+          min="0"
+          value={interestRate}
+          onChange={(e) => setInterestRate(e.target.value)}
+          placeholder="109.81"
+          className="font-mono"
+        />
+      </Field>
 
       <Field label="Color">
         <div className="mt-1 flex flex-wrap items-center gap-2">
