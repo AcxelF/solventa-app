@@ -40,9 +40,13 @@ export default function GoalsView({ initialGoalId }) {
 
   useEffect(() => {
     setLoading(true);
+    setError("");
     load()
       .then(() => setLoading(false))
-      .catch(() => setLoading(false));
+      .catch((err) => {
+        setError(err.message);
+        setLoading(false);
+      });
   }, [load]);
 
   useEffect(() => {

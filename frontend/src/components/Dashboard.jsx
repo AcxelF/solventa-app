@@ -60,6 +60,7 @@ export default function Dashboard({
   const [transactions, setTransactions] = useState([]);
   const [widgets, setWidgets] = useState(emptyWidgets());
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
   const [form, setForm] = useState(null);
   const [pendingDelete, setPendingDelete] = useState(null);
 
@@ -76,12 +77,18 @@ export default function Dashboard({
 
   useEffect(() => {
     setLoading(true);
+    setError("");
     load(month)
       .then(() => setLoading(false))
-      .catch(() => setLoading(false));
+      .catch((err) => {
+        setError(err.message);
+        setLoading(false);
+      });
 
     const interval = setInterval(() => {
-      load(month).catch(() => {});
+      load(month)
+        .then(() => setError(""))
+        .catch((err) => setError(err.message));
       if (onDataChanged) onDataChanged();
     }, 4000);
 
@@ -113,6 +120,11 @@ export default function Dashboard({
 
   return (
     <div>
+      {error && (
+        <p className="mb-4 rounded-lg border border-negative/30 bg-negative/10 px-4 py-3 text-sm text-negative">
+          No pude cargar los datos: {error}
+        </p>
+      )}
       <div className="grid gap-8 lg:grid-cols-[22fr_56fr_22fr]">
         <aside className="min-w-0 space-y-6">
           <UpcomingPayments

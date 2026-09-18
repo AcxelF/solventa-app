@@ -38,9 +38,13 @@ export default function CreditCardsView() {
 
   useEffect(() => {
     setLoading(true);
+    setError("");
     load()
       .then(() => setLoading(false))
-      .catch(() => setLoading(false));
+      .catch((err) => {
+        setError(err.message);
+        setLoading(false);
+      });
   }, [load]);
 
   async function openDetail(card) {

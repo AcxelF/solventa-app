@@ -39,9 +39,13 @@ export default function BudgetsView({ categories, onDataChanged }) {
 
   useEffect(() => {
     setLoading(true);
+    setError("");
     load(month)
       .then(() => setLoading(false))
-      .catch(() => setLoading(false));
+      .catch((err) => {
+        setError(err.message);
+        setLoading(false);
+      });
   }, [month, load]);
 
   const budgetCategoryIds = new Set(budgets.map((b) => b.category_id));
